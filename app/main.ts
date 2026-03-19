@@ -59,6 +59,12 @@ function updateChunkInfo(): void {
     statusBar.setPayloadSize(data.length);
     chunkEl.textContent = `(${chunks.length} chunks)`;
     infoEl.textContent = `Palette ${palImg.palette.length}-color ${data.length}B row-run`;
+    // Show quantized preview in receive panel so user can see the palette rendering
+    receiveDisplay.showPalettePreview(
+      size, size,
+      Array.from(palImg.indices),
+      palImg.palette,
+    );
     return;
   }
 

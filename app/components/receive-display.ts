@@ -48,7 +48,7 @@ export class ReceiveDisplay {
       this.container.appendChild(this.progressCanvas);
     }
 
-    if (palette) {
+    if (palette && palette.length > 0) {
       this.renderPalettePixels(this.progressCtx!, width, height, pixels, palette);
       const pct = Math.round(progress * 100);
       this.info.textContent = `Receiving ${width}x${height} ${palette.length}-color — ${pct}%`;
@@ -58,6 +58,24 @@ export class ReceiveDisplay {
       const pct = Math.round(progress * 100);
       this.info.textContent = `Receiving ${width}x${height} ${levels > 2 ? levels + '-gray' : 'B&W'} — ${pct}%`;
     }
+  }
+
+  /**
+   * Preview a palette image directly (no transmission needed).
+   */
+  showPalettePreview(
+    width: number, height: number,
+    indices: number[],
+    palette: { r: number; g: number; b: number }[],
+  ): void {
+    this.container.innerHTML = '';
+    const canvas = document.createElement('canvas');
+    canvas.width = DISPLAY_PX;
+    canvas.height = DISPLAY_PX;
+    const ctx = canvas.getContext('2d')!;
+    this.renderPalettePixels(ctx, width, height, indices, palette);
+    this.container.appendChild(canvas);
+    this.info.textContent = `Preview: ${width}x${height} ${palette.length}-color quantized`;
   }
 
   private renderQr(msg: QrMessage): void {
@@ -100,7 +118,7 @@ export class ReceiveDisplay {
     canvas.height = DISPLAY_PX;
     const ctx = canvas.getContext('2d')!;
 
-    if (msg.palette) {
+    if (msg.palette && msg.palette.length > 0) {
       this.renderPalettePixels(ctx, msg.width, msg.height, msg.pixels, msg.palette);
       this.container.appendChild(canvas);
       this.info.textContent = `Image ${msg.width}x${msg.height} ${msg.palette.length}-color — complete`;
@@ -119,45 +137,15 @@ export class ReceiveDisplay {
     pixels: number[],
     levels: number,
   ): void {
-    const maxDim = Math.max(width, height);
-    const cellSize = DISPLAY_PX / maxDim;
-    const offsetX = (DISPLAY_PX - cellSize * width) / 2;
-    const offsetY = (DISPLAY_PX - cellSize * height) / 2;
-    const maxVal = levels - 1;
-
-    // Use ImageData for performance on larger images
-    const imgData = ctx.createImageData(DISPLAY_PX, DISPLAY_PX);
-    const d = imgData.data;
-    // Fill background
-    for (let i = 0; i < d.length; i += 4) {
-      d[i] = 0x1a; d[i+1] = 0x1a; d[i+2] = 0x25; d[i+3] = 0xff;
-    }
-
-    for (let row = 0; row < height; row++) {
-      for (let col = 0; col < width; col++) {
-        const val = pixels[row * width + col];
-        if (val <= 0) continue;
-
-        const brightness = maxVal > 0 ? val / maxVal : 1;
-        const r = 0;
-        const g = Math.round(0x88 + (0xff - 0x88) * brightness);
-        const b = Math.round(0x88 * brightness);
-
-        const px0 = Math.floor(offsetX + col * cellSize);
-        const py0 = Math.floor(offsetY + row * cellSize);
-        const px1 = Math.floor(offsetX + (col + 1) * cellSize);
-        const py1 = Math.floor(offsetY + (row + 1) * cellSize);
-
-        for (let py = py0; py < py1 && py < DISPLAY_PX; py++) {
-          for (let px = px0; px < px1 && px < DISPLAY_PX; px++) {
-            if (px < 0 || py < 0) continue;
-            const idx = (py * DISPLAY_PX + px) * 4;
-            d[idx] = r; d[idx+1] = g; d[idx+2] = b; d[idx+3] = 0xff;
-          }
-        }
-      }
-    }
-    ctx.putImageData(imgData, 0, 0);
+    this.renderToCanvas(ctx, width, height, (row, col) => {
+      const val = pixels[row * width + col] ?? 0;
+      if (val <= 0) return null;
+      const maxVal = levels - 1;
+      const brightness = maxVal > 0 ? val / maxVal : 1;
+      const g = Math.round(0x88 + (0xff - 0x88) * brightness);
+      const b = Math.round(0x88 * brightness);
+      return { r: 0, g, b };
+    });
   }
 
   private renderPalettePixels(
@@ -166,36 +154,83 @@ export class ReceiveDisplay {
     indices: number[],
     palette: { r: number; g: number; b: number }[],
   ): void {
-    const maxDim = Math.max(width, height);
-    const cellSize = DISPLAY_PX / maxDim;
-    const offsetX = (DISPLAY_PX - cellSize * width) / 2;
-    const offsetY = (DISPLAY_PX - cellSize * height) / 2;
+    this.renderToCanvas(ctx, width, height, (row, col) => {
+      const colorIdx = indices[row * width + col] ?? 0;
+      return palette[colorIdx] ?? { r: 0, g: 0, b: 0 };
+    });
+  }
 
+  /**
+   * Generic pixel renderer that handles any image size correctly,
+   * including images larger than the display canvas.
+   */
+  private renderToCanvas(
+    ctx: CanvasRenderingContext2D,
+    width: number,
+    height: number,
+    getColor: (row: number, col: number) => { r: number; g: number; b: number } | null,
+  ): void {
     const imgData = ctx.createImageData(DISPLAY_PX, DISPLAY_PX);
     const d = imgData.data;
+
+    // Fill background
     for (let i = 0; i < d.length; i += 4) {
-      d[i] = 0x1a; d[i+1] = 0x1a; d[i+2] = 0x25; d[i+3] = 0xff;
+      d[i] = 0x1a; d[i + 1] = 0x1a; d[i + 2] = 0x25; d[i + 3] = 0xff;
     }
 
-    for (let row = 0; row < height; row++) {
-      for (let col = 0; col < width; col++) {
-        const colorIdx = indices[row * width + col];
-        const color = palette[colorIdx] ?? { r: 0, g: 0, b: 0 };
+    const maxDim = Math.max(width, height);
 
-        const px0 = Math.floor(offsetX + col * cellSize);
-        const py0 = Math.floor(offsetY + row * cellSize);
-        const px1 = Math.floor(offsetX + (col + 1) * cellSize);
-        const py1 = Math.floor(offsetY + (row + 1) * cellSize);
+    if (maxDim <= DISPLAY_PX) {
+      // Image fits — scale up with integer-ish cell sizes
+      const cellSize = DISPLAY_PX / maxDim;
+      const offsetX = (DISPLAY_PX - cellSize * width) / 2;
+      const offsetY = (DISPLAY_PX - cellSize * height) / 2;
 
-        for (let py = py0; py < py1 && py < DISPLAY_PX; py++) {
-          for (let px = px0; px < px1 && px < DISPLAY_PX; px++) {
-            if (px < 0 || py < 0) continue;
-            const idx = (py * DISPLAY_PX + px) * 4;
-            d[idx] = color.r; d[idx+1] = color.g; d[idx+2] = color.b; d[idx+3] = 0xff;
+      for (let row = 0; row < height; row++) {
+        for (let col = 0; col < width; col++) {
+          const color = getColor(row, col);
+          if (!color) continue;
+
+          const px0 = Math.floor(offsetX + col * cellSize);
+          const py0 = Math.floor(offsetY + row * cellSize);
+          const px1 = Math.ceil(offsetX + (col + 1) * cellSize);
+          const py1 = Math.ceil(offsetY + (row + 1) * cellSize);
+
+          for (let py = Math.max(0, py0); py < Math.min(py1, DISPLAY_PX); py++) {
+            for (let px = Math.max(0, px0); px < Math.min(px1, DISPLAY_PX); px++) {
+              const idx = (py * DISPLAY_PX + px) * 4;
+              d[idx] = color.r; d[idx + 1] = color.g; d[idx + 2] = color.b; d[idx + 3] = 0xff;
+            }
           }
         }
       }
+    } else {
+      // Image is larger than display — sample/downsample
+      const scale = DISPLAY_PX / maxDim;
+      const dispW = Math.round(width * scale);
+      const dispH = Math.round(height * scale);
+      const offsetX = Math.floor((DISPLAY_PX - dispW) / 2);
+      const offsetY = Math.floor((DISPLAY_PX - dispH) / 2);
+
+      for (let py = 0; py < dispH; py++) {
+        for (let px = 0; px < dispW; px++) {
+          const srcRow = Math.floor(py / scale);
+          const srcCol = Math.floor(px / scale);
+          const color = getColor(
+            Math.min(srcRow, height - 1),
+            Math.min(srcCol, width - 1),
+          );
+          if (!color) continue;
+
+          const dx = offsetX + px;
+          const dy = offsetY + py;
+          if (dx < 0 || dx >= DISPLAY_PX || dy < 0 || dy >= DISPLAY_PX) continue;
+          const idx = (dy * DISPLAY_PX + dx) * 4;
+          d[idx] = color.r; d[idx + 1] = color.g; d[idx + 2] = color.b; d[idx + 3] = 0xff;
+        }
+      }
     }
+
     ctx.putImageData(imgData, 0, 0);
   }
 
