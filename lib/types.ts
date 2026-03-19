@@ -2,6 +2,7 @@ export enum FrameType {
   QR = 0x01,
   IMG = 0x02,
   TXT = 0x03,
+  CHUNK = 0x04,
 }
 
 export enum ECLevel {
@@ -51,13 +52,21 @@ export interface TxtMessage {
   text: string;
 }
 
-export type SonicMessage = QrMessage | ImgMessage | TxtMessage;
+export interface ChunkedImgMessage {
+  type: FrameType.CHUNK;
+  width: number;
+  height: number;
+  pixels: boolean[];
+}
+
+export type SonicMessage = QrMessage | ImgMessage | TxtMessage | ChunkedImgMessage;
 
 export interface SonicPixelConfig {
   onReceive?: (msg: SonicMessage) => void;
   onError?: (err: Error) => void;
   onStateChange?: (state: SonicState) => void;
   onAudioLevel?: (level: number) => void;
+  onChunkProgress?: (pixels: boolean[], width: number, height: number, progress: number) => void;
   protocol?: SonicProtocol;
   volume?: number;
 }

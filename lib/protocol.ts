@@ -17,6 +17,7 @@ import {
   MAX_IMG_DIMENSION,
   MAX_TEXT_BYTES,
 } from './constants.js';
+import { CHUNK_TYPE } from './chunked.js';
 
 export function encodeFrame(msg: SonicMessage): Uint8Array {
   switch (msg.type) {
@@ -26,12 +27,14 @@ export function encodeFrame(msg: SonicMessage): Uint8Array {
       return encodeImgFrame(msg);
     case FrameType.TXT:
       return encodeTxtFrame(msg);
+    case FrameType.CHUNK:
+      throw new Error('Use encodeChunkedImage() for chunked images');
     default:
       throw new Error(`Unknown frame type`);
   }
 }
 
-export function decodeFrame(data: Uint8Array): SonicMessage {
+export function decodeFrame(data: Uint8Array): SonicMessage | 'chunk' {
   if (data.length < 2) {
     throw new Error('Frame too short');
   }
@@ -44,6 +47,8 @@ export function decodeFrame(data: Uint8Array): SonicMessage {
       return decodeImgFrame(data);
     case FrameType.TXT:
       return decodeTxtFrame(data);
+    case CHUNK_TYPE:
+      return 'chunk';
     default:
       throw new Error(`Unknown frame type: 0x${type.toString(16)}`);
   }

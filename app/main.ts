@@ -1,10 +1,9 @@
 import { SonicPixel } from '../lib/wavepx.js';
-import { encodeFrame } from '../lib/protocol.js';
-import { createQrMessage } from '../lib/qr.js';
+import { encodeChunkedImage } from '../lib/chunked.js';
+import { rleEncode } from '../lib/rle.js';
 import { packBits } from '../lib/bitpack.js';
 import {
   FrameType,
-  ECLevel,
   SonicState,
   SonicProtocol,
   type SonicMessage,
@@ -16,13 +15,11 @@ import { TextPanel } from './components/text-panel.js';
 import { ReceiveDisplay } from './components/receive-display.js';
 import { StatusBar } from './components/status-bar.js';
 import { Controls } from './components/controls.js';
-import { IMG_HEADER_SIZE } from '../lib/constants.js';
 
 let sonic: SonicPixel | null = null;
 let activeTab = 'draw';
 let isListening = false;
 
-// Components
 let pixelCanvas: PixelCanvas;
 let qrPanel: QrPanel;
 let textPanel: TextPanel;
@@ -32,6 +29,36 @@ let controls: Controls;
 
 function updatePayloadSize(size: number): void {
   statusBar.setPayloadSize(size);
+}
+
+function updateChunkInfo(): void {
+  const chunkEl = document.getElementById('chunk-count')!;
+  const infoEl = document.getElementById('chunk-info')!;
+
+  if (activeTab !== 'draw') {
+    chunkEl.textContent = '';
+    infoEl.textContent = '';
+    return;
+  }
+
+  const size = pixelCanvas.getGridSize();
+  const pixels = pixelCanvas.getPixels();
+  const raw = packBits(pixels);
+  const rle = rleEncode(pixels);
+  const useRle = rle.length < raw.length;
+  const dataSize = useRle ? rle.length : raw.length;
+  const chunks = encodeChunkedImage(size, size, pixels);
+  const ratio = raw.length > 0 ? (dataSize / raw.length * 100).toFixed(0) : '100';
+
+  statusBar.setPayloadSize(dataSize);
+
+  if (chunks.length === 1) {
+    chunkEl.textContent = '(1 frame)';
+    infoEl.textContent = `${useRle ? 'RLE' : 'Raw'} ${dataSize}B — ${ratio}% of raw`;
+  } else {
+    chunkEl.textContent = `(${chunks.length} chunks)`;
+    infoEl.textContent = `${useRle ? 'RLE' : 'Raw'} ${dataSize}B — ${ratio}% of raw ${raw.length}B`;
+  }
 }
 
 function initTabs(): void {
@@ -49,20 +76,9 @@ function initTabs(): void {
       contents.forEach((c) => c.classList.remove('active'));
       document.getElementById(`tab-${target}`)!.classList.add('active');
 
-      // Update payload size for current tab
-      updatePayloadForTab();
+      updateChunkInfo();
     });
   });
-}
-
-function updatePayloadForTab(): void {
-  if (activeTab === 'draw') {
-    const size = pixelCanvas.getGridSize();
-    const totalPixels = size * size;
-    const packedBytes = Math.ceil(totalPixels / 8);
-    updatePayloadSize(IMG_HEADER_SIZE + packedBytes);
-  }
-  // QR and text panels update themselves
 }
 
 function initComponents(): void {
@@ -77,12 +93,23 @@ function initComponents(): void {
   gridSelect.addEventListener('change', () => {
     const size = parseInt(gridSelect.value);
     pixelCanvas.setGridSize(size);
-    updatePayloadForTab();
+    updateChunkInfo();
   });
 
   // Clear button
   document.getElementById('clear-canvas')!.addEventListener('click', () => {
     pixelCanvas.clear();
+    updateChunkInfo();
+  });
+
+  // Image upload
+  const imageUpload = document.getElementById('image-upload') as HTMLInputElement;
+  imageUpload.addEventListener('change', async () => {
+    const file = imageUpload.files?.[0];
+    if (!file) return;
+    await pixelCanvas.loadImage(file);
+    updateChunkInfo();
+    imageUpload.value = ''; // reset so same file can be re-selected
   });
 
   controls = new Controls({
@@ -92,7 +119,7 @@ function initComponents(): void {
     onSend: handleSend,
   });
 
-  updatePayloadForTab();
+  updateChunkInfo();
 }
 
 async function initSonic(): Promise<void> {
@@ -111,12 +138,14 @@ async function initSonic(): Promise<void> {
     onAudioLevel: (level: number) => {
       statusBar.setAudioLevel(level);
     },
+    onChunkProgress: (pixels, width, height, progress) => {
+      receiveDisplay.showProgress(pixels, width, height, progress);
+    },
     protocol: SonicProtocol.AudibleFast,
     volume: 50,
   });
 
   await sp.init();
-  // Only assign after successful init
   sonic = sp;
 }
 
@@ -150,7 +179,10 @@ async function handleSend(): Promise<void> {
     switch (activeTab) {
       case 'draw': {
         const size = pixelCanvas.getGridSize();
-        await sonic!.sendImage(size, size, pixelCanvas.getPixels());
+        await sonic!.sendChunkedImage(
+          size, size, pixelCanvas.getPixels(),
+          (sent, total) => statusBar.setSendProgress(sent, total),
+        );
         break;
       }
       case 'qr': {
@@ -178,7 +210,6 @@ async function handleSend(): Promise<void> {
   }
 }
 
-// Boot
 document.addEventListener('DOMContentLoaded', () => {
   initTabs();
   initComponents();

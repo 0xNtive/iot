@@ -1,6 +1,8 @@
 export { SonicPixel } from './wavepx.js';
 export { encodeFrame, decodeFrame } from './protocol.js';
 export { packBits, unpackBits } from './bitpack.js';
+export { rleEncode, rleDecode } from './rle.js';
+export { encodeChunkedImage, decodeChunkFrame, ChunkAssembler } from './chunked.js';
 export { createQrMessage } from './qr.js';
 export {
   FrameType,
@@ -10,6 +12,7 @@ export {
   type QrMessage,
   type ImgMessage,
   type TxtMessage,
+  type ChunkedImgMessage,
   type SonicMessage,
   type SonicPixelConfig,
   type QrSendOptions,

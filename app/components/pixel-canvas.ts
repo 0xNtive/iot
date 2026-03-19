@@ -19,16 +19,13 @@ export class PixelCanvas {
     this.canvas.addEventListener('mouseup', () => this.drawing = false);
     this.canvas.addEventListener('mouseleave', () => this.drawing = false);
 
-    // Touch support
     this.canvas.addEventListener('touchstart', (e) => {
       e.preventDefault();
-      const touch = e.touches[0];
-      this.onMouseDown(touch);
+      this.onMouseDown(e.touches[0]);
     });
     this.canvas.addEventListener('touchmove', (e) => {
       e.preventDefault();
-      const touch = e.touches[0];
-      this.onMouseMove(touch);
+      this.onMouseMove(e.touches[0]);
     });
     this.canvas.addEventListener('touchend', () => this.drawing = false);
 
@@ -52,6 +49,41 @@ export class PixelCanvas {
 
   getGridSize(): number {
     return this.gridSize;
+  }
+
+  /**
+   * Load an image file, convert to monochrome, fit into current grid size.
+   */
+  async loadImage(file: File): Promise<void> {
+    const img = await createImageBitmap(file);
+    const size = this.gridSize;
+
+    // Draw image scaled to grid size on an offscreen canvas
+    const off = new OffscreenCanvas(size, size);
+    const ctx = off.getContext('2d')!;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, size, size);
+    // Fit image maintaining aspect ratio
+    const scale = Math.min(size / img.width, size / img.height);
+    const w = Math.round(img.width * scale);
+    const h = Math.round(img.height * scale);
+    const x = Math.round((size - w) / 2);
+    const y = Math.round((size - h) / 2);
+    ctx.drawImage(img, x, y, w, h);
+
+    // Convert to monochrome
+    const imageData = ctx.getImageData(0, 0, size, size);
+    const data = imageData.data;
+    this.pixels = new Array(size * size);
+    for (let i = 0; i < size * size; i++) {
+      const r = data[i * 4];
+      const g = data[i * 4 + 1];
+      const b = data[i * 4 + 2];
+      const luma = 0.299 * r + 0.587 * g + 0.114 * b;
+      this.pixels[i] = luma < 128; // dark = on
+    }
+
+    this.render();
   }
 
   private getCellFromEvent(e: MouseEvent | Touch): { col: number; row: number } | null {
@@ -105,10 +137,12 @@ export class PixelCanvas {
           this.ctx.fillRect(x, y, cellSize, cellSize);
         }
 
-        // Grid lines
-        this.ctx.strokeStyle = '#222233';
-        this.ctx.lineWidth = 0.5;
-        this.ctx.strokeRect(x, y, cellSize, cellSize);
+        // Only draw grid lines for sizes <= 64 (too dense otherwise)
+        if (this.gridSize <= 64) {
+          this.ctx.strokeStyle = '#222233';
+          this.ctx.lineWidth = 0.5;
+          this.ctx.strokeRect(x, y, cellSize, cellSize);
+        }
       }
     }
   }

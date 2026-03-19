@@ -33,11 +33,20 @@
                   <option value="16" selected>16x16</option>
                   <option value="24">24x24</option>
                   <option value="32">32x32</option>
+                  <option value="64">64x64</option>
+                  <option value="128">128x128</option>
+                  <option value="256">256x256</option>
+                  <option value="512">512x512</option>
                 </select>
               </label>
               <button id="clear-canvas" class="btn-small">Clear</button>
+              <label class="btn-small upload-btn">
+                Load Image
+                <input type="file" id="image-upload" accept="image/*" hidden />
+              </label>
             </div>
             <canvas id="pixel-canvas" width="320" height="320"></canvas>
+            <div id="chunk-info" class="chunk-info"></div>
           </div>
 
           <!-- QR tab -->
@@ -100,7 +109,7 @@
       <div class="status-bar" id="status-bar">
         <span id="status-state">Status: Idle</span>
         <span id="status-audio">Audio: <span id="audio-meter">----</span></span>
-        <span id="status-payload"><span id="payload-size">0</span>/140 B</span>
+        <span id="status-payload"><span id="payload-size">0</span> B <span id="chunk-count"></span></span>
       </div>
     </footer>
   </div>

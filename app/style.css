@@ -193,6 +193,22 @@ textarea:focus {
   margin-top: 4px;
 }
 
+.chunk-info {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-top: 6px;
+}
+
+.upload-btn {
+  cursor: pointer;
+  color: var(--text-dim);
+}
+
+.upload-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
 /* Receive display */
 #receive-display {
   min-height: 320px;

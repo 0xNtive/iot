@@ -33,4 +33,9 @@ export class StatusBar {
     this.payloadEl.textContent = String(size);
     this.payloadEl.style.color = size > 140 ? '#ff0066' : '';
   }
+
+  setSendProgress(sent: number, total: number): void {
+    this.stateEl.textContent = `Sending chunk ${sent}/${total}`;
+    this.stateEl.style.color = '#ffaa00';
+  }
 }
