@@ -3,9 +3,10 @@ import { AudioManager } from './audio.js';
 import { encodeFrame, decodeFrame } from './protocol.js';
 import { createQrMessage } from './qr.js';
 import {
-  encodeChunkedImage, encodeChunkedGrayImage,
+  encodeChunkedImage, encodeChunkedGrayImage, encodeChunkedPaletteImage,
   decodeChunkFrame, ChunkAssembler, CHUNK_TYPE, BitDepth,
 } from './chunked.js';
+import { type PaletteImage } from './palette.js';
 import {
   FrameType,
   SonicState,
@@ -45,9 +46,9 @@ export class SonicPixel {
     this.config = config;
     this.protocol = config.protocol ?? SonicProtocol.AudibleFast;
     this.volume = config.volume ?? 50;
-    this.assembler = new ChunkAssembler((pixels, width, height, bitDepth, progress) => {
+    this.assembler = new ChunkAssembler((pixels, width, height, bitDepth, progress, palette) => {
       const bd = bitDepth === BitDepth.Gray4 ? 2 : bitDepth === BitDepth.Gray16 ? 4 : 1;
-      config.onChunkProgress?.(pixels, width, height, bd, progress);
+      config.onChunkProgress?.(pixels, width, height, bd, progress, palette);
     });
   }
 
@@ -80,6 +81,7 @@ export class SonicPixel {
                 height: result.height,
                 bitDepth: bd,
                 pixels: result.pixels,
+                palette: result.palette,
               });
             }
           } else {
@@ -151,6 +153,18 @@ export class SonicPixel {
     onProgress?: (sent: number, total: number) => void,
   ): Promise<void> {
     const chunks = encodeChunkedGrayImage(width, height, pixels, bitDepth);
+    await this.sendChunks(chunks, onProgress);
+  }
+
+  /**
+   * Send a palette-indexed color image as chunks.
+   * Colors are announced once, then each color's pixel positions sent as row-runs.
+   */
+  async sendPaletteImage(
+    img: PaletteImage,
+    onProgress?: (sent: number, total: number) => void,
+  ): Promise<void> {
+    const chunks = encodeChunkedPaletteImage(img);
     await this.sendChunks(chunks, onProgress);
   }
 

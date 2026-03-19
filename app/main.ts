@@ -1,7 +1,8 @@
 import { SonicPixel } from '../lib/wavepx.js';
-import { encodeChunkedImage, encodeChunkedGrayImage } from '../lib/chunked.js';
+import { encodeChunkedImage, encodeChunkedGrayImage, encodeChunkedPaletteImage } from '../lib/chunked.js';
 import { rleEncode, rleEncodeGray } from '../lib/rle.js';
 import { packBits, packValues } from '../lib/bitpack.js';
+import { quantizeColors, encodePaletteImage } from '../lib/palette.js';
 import {
   FrameType,
   SonicState,
@@ -19,6 +20,7 @@ import { Controls } from './components/controls.js';
 let sonic: SonicPixel | null = null;
 let activeTab = 'draw';
 let isListening = false;
+let colorMode: 'bw' | 'gray4' | 'gray16' | 'color16' = 'bw';
 
 let pixelCanvas: PixelCanvas;
 let qrPanel: QrPanel;
@@ -42,6 +44,24 @@ function updateChunkInfo(): void {
   }
 
   const size = pixelCanvas.getGridSize();
+
+  if (colorMode === 'color16') {
+    const rgba = pixelCanvas.getRgbaData();
+    if (!rgba) {
+      chunkEl.textContent = '';
+      infoEl.textContent = 'Load an image to use color mode';
+      statusBar.setPayloadSize(0);
+      return;
+    }
+    const palImg = quantizeColors(rgba, size, size, 16);
+    const data = encodePaletteImage(palImg);
+    const chunks = encodeChunkedPaletteImage(palImg);
+    statusBar.setPayloadSize(data.length);
+    chunkEl.textContent = `(${chunks.length} chunks)`;
+    infoEl.textContent = `Palette ${palImg.palette.length}-color ${data.length}B row-run`;
+    return;
+  }
+
   const pixels = pixelCanvas.getPixels();
   const bitDepth = pixelCanvas.getBitDepth();
   const levels = pixelCanvas.getGrayLevels();
@@ -64,11 +84,9 @@ function updateChunkInfo(): void {
   const dataSize = Math.min(rawSize, rleSize);
   const useRle = rleSize < rawSize;
   const ratio = rawSize > 0 ? (dataSize / rawSize * 100).toFixed(0) : '100';
-
   statusBar.setPayloadSize(dataSize);
 
   const modeLabel = levels > 2 ? `${levels}-gray` : 'B&W';
-
   if (chunks.length === 1) {
     chunkEl.textContent = '(1 frame)';
     infoEl.textContent = `${modeLabel} ${useRle ? 'RLE' : 'Raw'} ${dataSize}B — ${ratio}% of raw`;
@@ -111,9 +129,26 @@ function initComponents(): void {
     updateChunkInfo();
   });
 
-  const graySelect = document.getElementById('gray-levels') as HTMLSelectElement;
-  graySelect.addEventListener('change', () => {
-    pixelCanvas.setGrayLevels(parseInt(graySelect.value));
+  const modeSelect = document.getElementById('color-mode') as HTMLSelectElement;
+  modeSelect.addEventListener('change', () => {
+    colorMode = modeSelect.value as typeof colorMode;
+    switch (colorMode) {
+      case 'bw':
+        pixelCanvas.setColorMode(false);
+        pixelCanvas.setGrayLevels(2);
+        break;
+      case 'gray4':
+        pixelCanvas.setColorMode(false);
+        pixelCanvas.setGrayLevels(4);
+        break;
+      case 'gray16':
+        pixelCanvas.setColorMode(false);
+        pixelCanvas.setGrayLevels(16);
+        break;
+      case 'color16':
+        pixelCanvas.setColorMode(true);
+        break;
+    }
     updateChunkInfo();
   });
 
@@ -157,8 +192,8 @@ async function initSonic(): Promise<void> {
     onAudioLevel: (level: number) => {
       statusBar.setAudioLevel(level);
     },
-    onChunkProgress: (pixels, width, height, bitDepth, progress) => {
-      receiveDisplay.showProgress(pixels, width, height, bitDepth, progress);
+    onChunkProgress: (pixels, width, height, bitDepth, progress, palette) => {
+      receiveDisplay.showProgress(pixels, width, height, bitDepth, progress, palette);
     },
     protocol: SonicProtocol.AudibleFast,
     volume: 50,
@@ -194,19 +229,21 @@ async function handleSend(): Promise<void> {
     switch (activeTab) {
       case 'draw': {
         const size = pixelCanvas.getGridSize();
-        const bitDepth = pixelCanvas.getBitDepth();
-        const pixels = pixelCanvas.getPixels();
+        const progress = (sent: number, total: number) => statusBar.setSendProgress(sent, total);
 
-        if (bitDepth === 1) {
-          await sonic!.sendChunkedImage(
-            size, size, pixels.map(v => v > 0),
-            (sent, total) => statusBar.setSendProgress(sent, total),
-          );
+        if (colorMode === 'color16') {
+          const rgba = pixelCanvas.getRgbaData();
+          if (!rgba) { alert('Load an image first for color mode'); return; }
+          const palImg = quantizeColors(rgba, size, size, 16);
+          await sonic!.sendPaletteImage(palImg, progress);
         } else {
-          await sonic!.sendGrayImage(
-            size, size, pixels, bitDepth,
-            (sent, total) => statusBar.setSendProgress(sent, total),
-          );
+          const pixels = pixelCanvas.getPixels();
+          const bitDepth = pixelCanvas.getBitDepth();
+          if (bitDepth === 1) {
+            await sonic!.sendChunkedImage(size, size, pixels.map(v => v > 0), progress);
+          } else {
+            await sonic!.sendGrayImage(size, size, pixels, bitDepth, progress);
+          }
         }
         break;
       }

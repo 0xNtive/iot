@@ -6,6 +6,8 @@ export class PixelCanvas {
   private gridSize: number;
   private pixels: number[];  // 0 to maxVal
   private grayLevels: number = 2; // 2=B&W, 4=2bit, 16=4bit
+  private colorMode = false;
+  private rgbaData: Uint8Array | null = null; // raw RGBA for color quantization
   private drawing = false;
   private drawValue = 0;
 
@@ -81,6 +83,21 @@ export class PixelCanvas {
     return this.gridSize;
   }
 
+  setColorMode(enabled: boolean): void {
+    this.colorMode = enabled;
+    if (!enabled) this.rgbaData = null;
+    this.render();
+  }
+
+  isColorMode(): boolean {
+    return this.colorMode;
+  }
+
+  /** Get raw RGBA pixel data for color quantization (only available after loadImage in color mode). */
+  getRgbaData(): Uint8Array | null {
+    return this.rgbaData;
+  }
+
   async loadImage(file: File): Promise<void> {
     const img = await createImageBitmap(file);
     const size = this.gridSize;
@@ -98,21 +115,31 @@ export class PixelCanvas {
 
     const imageData = ctx.getImageData(0, 0, size, size);
     const data = imageData.data;
-    const maxVal = this.grayLevels - 1;
-    const step = 256 / this.grayLevels;
 
-    this.pixels = new Array(size * size);
-    for (let i = 0; i < size * size; i++) {
-      const r = data[i * 4];
-      const g = data[i * 4 + 1];
-      const b = data[i * 4 + 2];
-      const luma = 0.299 * r + 0.587 * g + 0.114 * b;
-      // Invert: dark = high value (on), quantize to levels
-      const inverted = 255 - luma;
-      this.pixels[i] = Math.min(Math.floor(inverted / step), maxVal);
+    if (this.colorMode) {
+      // Store raw RGBA for palette quantization
+      this.rgbaData = new Uint8Array(data);
+      // Still compute grayscale pixels for preview
+      this.pixels = new Array(size * size);
+      for (let i = 0; i < size * size; i++) {
+        this.pixels[i] = 1; // just mark as "has content"
+      }
+      this.renderColor();
+    } else {
+      this.rgbaData = null;
+      const maxVal = this.grayLevels - 1;
+      const step = 256 / this.grayLevels;
+      this.pixels = new Array(size * size);
+      for (let i = 0; i < size * size; i++) {
+        const r = data[i * 4];
+        const g = data[i * 4 + 1];
+        const b = data[i * 4 + 2];
+        const luma = 0.299 * r + 0.587 * g + 0.114 * b;
+        const inverted = 255 - luma;
+        this.pixels[i] = Math.min(Math.floor(inverted / step), maxVal);
+      }
+      this.render();
     }
-
-    this.render();
   }
 
   private getCellFromEvent(e: MouseEvent | Touch): { col: number; row: number } | null {
@@ -177,6 +204,26 @@ export class PixelCanvas {
           this.ctx.lineWidth = 0.5;
           this.ctx.strokeRect(x, y, cellSize, cellSize);
         }
+      }
+    }
+  }
+
+  private renderColor(): void {
+    if (!this.rgbaData) return;
+    const size = this.gridSize;
+    const cellSize = CANVAS_PX / size;
+
+    this.ctx.fillStyle = '#1a1a25';
+    this.ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
+
+    for (let row = 0; row < size; row++) {
+      for (let col = 0; col < size; col++) {
+        const i = row * size + col;
+        const r = this.rgbaData[i * 4];
+        const g = this.rgbaData[i * 4 + 1];
+        const b = this.rgbaData[i * 4 + 2];
+        this.ctx.fillStyle = `rgb(${r},${g},${b})`;
+        this.ctx.fillRect(col * cellSize, row * cellSize, cellSize, cellSize);
       }
     }
   }

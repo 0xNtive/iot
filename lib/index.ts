@@ -2,7 +2,8 @@ export { SonicPixel } from './wavepx.js';
 export { encodeFrame, decodeFrame } from './protocol.js';
 export { packBits, unpackBits, packValues, unpackValues } from './bitpack.js';
 export { rleEncode, rleDecode, rleEncodeGray, rleDecodeGray, quantize, dequantize } from './rle.js';
-export { encodeChunkedImage, encodeChunkedGrayImage, decodeChunkFrame, ChunkAssembler } from './chunked.js';
+export { encodeChunkedImage, encodeChunkedGrayImage, encodeChunkedPaletteImage, decodeChunkFrame, ChunkAssembler } from './chunked.js';
+export { quantizeColors, encodePaletteImage, decodePaletteImage, type RGB, type PaletteImage } from './palette.js';
 export { createQrMessage } from './qr.js';
 export {
   FrameType,

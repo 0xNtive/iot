@@ -1,6 +1,7 @@
 import { rleEncode, rleDecode, rleEncodeGray, rleDecodeGray } from './rle.js';
 import { packBits, unpackBits, packValues, unpackValues } from './bitpack.js';
 import { MAX_PAYLOAD, PROTOCOL_VERSION } from './constants.js';
+import { encodePaletteImage, decodePaletteImage, type PaletteImage, type RGB } from './palette.js';
 
 /**
  * Chunk frame format (type 0x04):
@@ -36,6 +37,7 @@ export const enum Compression {
   Raw = 0,
   RLE = 1,
   RLEGray = 2,
+  Palette = 3,
 }
 
 export const enum BitDepth {
@@ -97,6 +99,15 @@ export function encodeChunkedGrayImage(
   const compression = useRle ? Compression.RLEGray : Compression.Raw;
 
   return buildChunks(width, height, data, compression, bd);
+}
+
+/**
+ * Encode a palette-indexed image into chunks using row-run compression.
+ * Each color is encoded as horizontal runs per row — sparse colors compress to almost nothing.
+ */
+export function encodeChunkedPaletteImage(img: PaletteImage): Uint8Array[] {
+  const data = encodePaletteImage(img);
+  return buildChunks(img.width, img.height, data, Compression.Palette, BitDepth.Mono);
 }
 
 function buildChunks(
@@ -182,6 +193,7 @@ export interface ChunkResult {
   height: number;
   pixels: number[];
   bitDepth: BitDepth;
+  palette?: RGB[];
 }
 
 /**
@@ -194,9 +206,9 @@ export class ChunkAssembler {
   private height = 0;
   private compression: Compression = Compression.Raw;
   private bitDepth: BitDepth = BitDepth.Mono;
-  private onProgress?: (pixels: number[], width: number, height: number, bitDepth: BitDepth, progress: number) => void;
+  private onProgress?: (pixels: number[], width: number, height: number, bitDepth: BitDepth, progress: number, palette?: RGB[]) => void;
 
-  constructor(onProgress?: (pixels: number[], width: number, height: number, bitDepth: BitDepth, progress: number) => void) {
+  constructor(onProgress?: (pixels: number[], width: number, height: number, bitDepth: BitDepth, progress: number, palette?: RGB[]) => void) {
     this.onProgress = onProgress;
   }
 
@@ -215,18 +227,22 @@ export class ChunkAssembler {
     if (this.width > 0 && this.height > 0) {
       const partial = this.assemblePartial();
       const progress = this.chunks.size / this.total;
-      this.onProgress?.(partial, this.width, this.height, this.bitDepth, progress);
+      this.onProgress?.(partial.pixels, this.width, this.height, this.bitDepth, progress, partial.palette);
     }
 
     if (this.chunks.size === this.total) {
-      const pixels = this.assemblePartial();
-      return { width: this.width, height: this.height, pixels, bitDepth: this.bitDepth };
+      const result = this.assemblePartial();
+      return {
+        width: this.width, height: this.height,
+        pixels: result.pixels, bitDepth: this.bitDepth,
+        palette: result.palette,
+      };
     }
 
     return null;
   }
 
-  private assemblePartial(): number[] {
+  private assemblePartial(): { pixels: number[]; palette?: RGB[] } {
     const parts: Uint8Array[] = [];
     let totalLen = 0;
     for (let i = 0; i < this.total; i++) {
@@ -248,17 +264,20 @@ export class ChunkAssembler {
 
     switch (this.compression) {
       case Compression.RLE:
-        // 1-bit RLE → convert booleans to numbers
-        return rleDecode(combined, totalPixels).map(b => b ? 1 : 0);
+        return { pixels: rleDecode(combined, totalPixels).map(b => b ? 1 : 0) };
       case Compression.RLEGray:
-        return rleDecodeGray(combined, totalPixels);
+        return { pixels: rleDecodeGray(combined, totalPixels) };
+      case Compression.Palette: {
+        const result = decodePaletteImage(combined, this.width, this.height);
+        return { pixels: result.indices, palette: result.palette };
+      }
       case Compression.Raw:
         if (actualBitDepth === 1) {
-          return unpackBits(combined, totalPixels).map(b => b ? 1 : 0);
+          return { pixels: unpackBits(combined, totalPixels).map(b => b ? 1 : 0) };
         }
-        return unpackValues(combined, totalPixels, actualBitDepth);
+        return { pixels: unpackValues(combined, totalPixels, actualBitDepth) };
       default:
-        return unpackBits(combined, totalPixels).map(b => b ? 1 : 0);
+        return { pixels: unpackBits(combined, totalPixels).map(b => b ? 1 : 0) };
     }
   }
 
