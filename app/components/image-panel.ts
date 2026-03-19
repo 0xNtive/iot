@@ -70,6 +70,11 @@ export class ImagePanel {
       this.updateChunkInfo();
       imageUpload.value = '';
     });
+
+    document.getElementById('image-clear')!.addEventListener('click', () => {
+      this.pixelCanvas.clear();
+      this.updateChunkInfo();
+    });
   }
 
   getPixelCanvas(): PixelCanvas {
@@ -80,7 +85,8 @@ export class ImagePanel {
     return this.colorMode;
   }
 
-  updateChunkInfo(): void {
+  /** Update chunk info display. Returns chunk count for status bar. */
+  updateChunkInfo(): number {
     const size = this.pixelCanvas.getGridSize();
 
     if (this.colorMode === 'color16') {
@@ -88,14 +94,14 @@ export class ImagePanel {
       if (!rgba) {
         this.chunkInfoEl.textContent = 'Load an image to use color mode';
         this.onUpdatePayload?.(0);
-        return;
+        return 0;
       }
       const palImg = quantizeColors(rgba, size, size, 16);
       const data = encodePaletteImage(palImg);
       const chunks = encodeChunkedPaletteImage(palImg);
       this.onUpdatePayload?.(data.length);
       this.chunkInfoEl.textContent = `Palette ${palImg.palette.length}-color ${data.length}B — ${chunks.length} chunk${chunks.length !== 1 ? 's' : ''}`;
-      return;
+      return chunks.length;
     }
 
     const pixels = this.pixelCanvas.getPixels();
@@ -124,5 +130,6 @@ export class ImagePanel {
 
     const modeLabel = levels > 2 ? `${levels}-gray` : 'B&W';
     this.chunkInfoEl.textContent = `${modeLabel} ${useRle ? 'RLE' : 'Raw'} ${dataSize}B — ${ratio}% of raw — ${chunks.length} chunk${chunks.length !== 1 ? 's' : ''}`;
+    return chunks.length;
   }
 }

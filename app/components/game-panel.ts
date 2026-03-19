@@ -47,7 +47,6 @@ export class GamePanel {
   private newGameBtn: HTMLButtonElement;
   private state: GameState;
   private onSendFrame: ((frame: Uint8Array) => void) | null = null;
-  private pendingShotResolve: (() => void) | null = null;
   private hoverCell: { x: number; y: number } | null = null;
   private targetHoverCell: { x: number; y: number } | null = null;
   private lastShot: { x: number; y: number; grid: 'my' | 'target' } | null = null;
@@ -93,6 +92,7 @@ export class GamePanel {
     this.render();
     this.setStatus(`Place your ships (${SHIP_SIZES.join(', ')})`, 'info');
     this.updateRoster();
+    this.updateCursors();
   }
 
   setSendCallback(cb: (frame: Uint8Array) => void): void {
@@ -282,6 +282,12 @@ export class GamePanel {
   private setStatus(text: string, type: StatusType = 'info'): void {
     this.statusEl.textContent = text;
     this.statusEl.className = `game-status game-status-${type}`;
+    this.updateCursors();
+  }
+
+  private updateCursors(): void {
+    this.myCanvas.style.cursor = this.state.phase === 'placing' ? 'crosshair' : 'default';
+    this.targetCanvas.style.cursor = this.state.phase === 'my-turn' ? 'crosshair' : 'default';
   }
 
   private updateRoster(): void {

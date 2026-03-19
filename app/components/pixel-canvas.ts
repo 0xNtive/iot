@@ -11,7 +11,8 @@ export class PixelCanvas {
   private colorMode = false;
   private rgbaData: Uint8Array | null = null; // raw RGBA for color quantization
   private rawLuma: Float64Array | null = null; // cached luminance for re-dithering
-  private sourceRgba: Uint8Array | null = null; // always stores RGBA from last loadImage()
+  private sourceRgba: Uint8Array | null = null; // RGBA at current grid size from last loadImage()
+  private sourceBitmap: ImageBitmap | null = null; // original image for re-sampling on grid size change
   private ditherAlgorithm: DitherAlgorithm = 'none';
   private drawing = false;
   private drawValue = 0;
@@ -48,7 +49,11 @@ export class PixelCanvas {
     this.rawLuma = null;
     this.sourceRgba = null;
     this.rgbaData = null;
-    this.render();
+    if (this.sourceBitmap) {
+      this.sampleBitmap(this.sourceBitmap);
+    } else {
+      this.render();
+    }
   }
 
   setGrayLevels(levels: number): void {
@@ -103,6 +108,8 @@ export class PixelCanvas {
     this.rawLuma = null;
     this.sourceRgba = null;
     this.rgbaData = null;
+    this.sourceBitmap?.close();
+    this.sourceBitmap = null;
     this.render();
   }
 
@@ -144,10 +151,21 @@ export class PixelCanvas {
     return this.rawLuma;
   }
 
+  /** Whether an image has been loaded (survives grid size changes). */
+  hasImage(): boolean {
+    return this.sourceBitmap !== null;
+  }
+
   async loadImage(file: File): Promise<void> {
     const img = await createImageBitmap(file);
-    const size = this.gridSize;
+    this.sourceBitmap?.close();
+    this.sourceBitmap = img;
+    this.sampleBitmap(img);
+  }
 
+  /** Sample an ImageBitmap to the current grid size and reprocess. */
+  private sampleBitmap(img: ImageBitmap): void {
+    const size = this.gridSize;
     const off = new OffscreenCanvas(size, size);
     const ctx = off.getContext('2d')!;
     ctx.fillStyle = '#ffffff';

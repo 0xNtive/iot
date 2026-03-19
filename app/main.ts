@@ -2,7 +2,7 @@ import { SonicPixel } from '../lib/wavepx.js';
 import { encodeChunkedImage, encodeChunkedGrayImage, encodeChunkedPaletteImage } from '../lib/chunked.js';
 import { rleEncode, rleEncodeGray } from '../lib/rle.js';
 import { packBits, packValues } from '../lib/bitpack.js';
-import { quantizeColors, encodePaletteImage } from '../lib/palette.js';
+import { quantizeColors } from '../lib/palette.js';
 import { encodeFrame } from '../lib/protocol.js';
 import {
   FrameType,
@@ -24,7 +24,7 @@ import { ImagePanel } from './components/image-panel.js';
 let sonic: SonicPixel | null = null;
 let activeTab = 'draw';
 let isListening = false;
-let colorMode: 'bw' | 'gray4' | 'gray16' | 'color16' = 'bw';
+let colorMode: 'bw' | 'gray4' | 'gray16' = 'bw';
 
 let pixelCanvas: PixelCanvas;
 let qrPanel: QrPanel;
@@ -45,9 +45,9 @@ function updateChunkInfo(): void {
   const infoEl = document.getElementById('chunk-info')!;
 
   if (activeTab === 'image') {
-    chunkEl.textContent = '';
     infoEl.textContent = '';
-    imagePanel.updateChunkInfo();
+    const chunkCount = imagePanel.updateChunkInfo();
+    chunkEl.textContent = chunkCount > 1 ? `(${chunkCount} chunks)` : chunkCount === 1 ? '(1 frame)' : '';
     return;
   }
 
@@ -58,27 +58,6 @@ function updateChunkInfo(): void {
   }
 
   const size = pixelCanvas.getGridSize();
-
-  if (colorMode === 'color16') {
-    const rgba = pixelCanvas.getRgbaData();
-    if (!rgba) {
-      chunkEl.textContent = '';
-      infoEl.textContent = 'Load an image first for color mode (or use Image tab)';
-      statusBar.setPayloadSize(0);
-      return;
-    }
-    const palImg = quantizeColors(rgba, size, size, 16);
-    const data = encodePaletteImage(palImg);
-    const chunks = encodeChunkedPaletteImage(palImg);
-    statusBar.setPayloadSize(data.length);
-    chunkEl.textContent = `(${chunks.length} chunks)`;
-    infoEl.textContent = `Palette ${palImg.palette.length}-color ${data.length}B row-run`;
-    receiveDisplay.showPalettePreview(
-      size, size, Array.from(palImg.indices), palImg.palette,
-    );
-    return;
-  }
-
   const pixels = pixelCanvas.getPixels();
   const bitDepth = pixelCanvas.getBitDepth();
   const levels = pixelCanvas.getGrayLevels();
@@ -114,7 +93,7 @@ function updateChunkInfo(): void {
 }
 
 /** Get the active pixel canvas (draw or image tab). */
-function getActivePixelCanvas(): { canvas: PixelCanvas; mode: typeof colorMode } {
+function getActivePixelCanvas(): { canvas: PixelCanvas; mode: 'bw' | 'gray4' | 'gray16' | 'color16' } {
   if (activeTab === 'image') {
     return { canvas: imagePanel.getPixelCanvas(), mode: imagePanel.getColorMode() };
   }
@@ -203,22 +182,11 @@ function initComponents(): void {
   const modeSelect = document.getElementById('color-mode') as HTMLSelectElement;
   modeSelect.addEventListener('change', () => {
     colorMode = modeSelect.value as typeof colorMode;
+    pixelCanvas.setColorMode(false);
     switch (colorMode) {
-      case 'bw':
-        pixelCanvas.setColorMode(false);
-        pixelCanvas.setGrayLevels(2);
-        break;
-      case 'gray4':
-        pixelCanvas.setColorMode(false);
-        pixelCanvas.setGrayLevels(4);
-        break;
-      case 'gray16':
-        pixelCanvas.setColorMode(false);
-        pixelCanvas.setGrayLevels(16);
-        break;
-      case 'color16':
-        pixelCanvas.setColorMode(true);
-        break;
+      case 'bw':    pixelCanvas.setGrayLevels(2);  break;
+      case 'gray4':  pixelCanvas.setGrayLevels(4);  break;
+      case 'gray16': pixelCanvas.setGrayLevels(16); break;
     }
     updateChunkInfo();
   });
