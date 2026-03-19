@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WAVEPX</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <div id="app">
+    <header class="header">
+      <h1 class="logo">WAVEPX</h1>
+      <span class="tagline">data over sound</span>
+    </header>
+
+    <nav class="tabs">
+      <button class="tab active" data-tab="draw">Draw</button>
+      <button class="tab" data-tab="qr">QR Code</button>
+      <button class="tab" data-tab="text">Text</button>
+    </nav>
+
+    <main class="panels">
+      <div class="panel-row">
+        <section class="panel send-panel">
+          <h2 class="panel-title">SEND</h2>
+
+          <!-- Draw tab -->
+          <div class="tab-content active" id="tab-draw">
+            <div class="grid-controls">
+              <label>Grid:
+                <select id="grid-size">
+                  <option value="8">8x8</option>
+                  <option value="16" selected>16x16</option>
+                  <option value="24">24x24</option>
+                  <option value="32">32x32</option>
+                </select>
+              </label>
+              <button id="clear-canvas" class="btn-small">Clear</button>
+            </div>
+            <canvas id="pixel-canvas" width="320" height="320"></canvas>
+          </div>
+
+          <!-- QR tab -->
+          <div class="tab-content" id="tab-qr">
+            <textarea id="qr-input" placeholder="Enter text or URL..." rows="3"></textarea>
+            <div class="qr-options">
+              <label>EC Level:
+                <select id="qr-ec">
+                  <option value="0">L (7%)</option>
+                  <option value="1" selected>M (15%)</option>
+                  <option value="2">Q (25%)</option>
+                  <option value="3">H (30%)</option>
+                </select>
+              </label>
+            </div>
+            <canvas id="qr-preview" width="320" height="320"></canvas>
+          </div>
+
+          <!-- Text tab -->
+          <div class="tab-content" id="tab-text">
+            <textarea id="text-input" placeholder="Type a message..." rows="5" maxlength="138"></textarea>
+            <div class="byte-counter"><span id="byte-count">0</span>/138 bytes</div>
+          </div>
+        </section>
+
+        <section class="panel receive-panel">
+          <h2 class="panel-title">RECEIVE</h2>
+          <div id="receive-display">
+            <div class="receive-placeholder">Listening for transmissions...</div>
+          </div>
+          <div id="receive-info" class="receive-info"></div>
+        </section>
+      </div>
+    </main>
+
+    <footer class="controls">
+      <div class="controls-row">
+        <label>Protocol:
+          <select id="protocol-select">
+            <option value="0">Audible Normal</option>
+            <option value="1" selected>Audible Fast</option>
+            <option value="2">Audible Fastest</option>
+            <option value="3">Ultrasound Normal</option>
+            <option value="4">Ultrasound Fast</option>
+            <option value="5">Ultrasound Fastest</option>
+            <option value="6">DT800 Normal</option>
+            <option value="7">DT800 Fast</option>
+            <option value="8">DT800 Fastest</option>
+          </select>
+        </label>
+        <label class="volume-label">Volume:
+          <input type="range" id="volume-slider" min="0" max="100" value="50" />
+          <span id="volume-value">50%</span>
+        </label>
+      </div>
+      <div class="controls-row">
+        <button id="btn-listen" class="btn">Start Listening</button>
+        <button id="btn-send" class="btn btn-primary">SEND</button>
+      </div>
+      <div class="status-bar" id="status-bar">
+        <span id="status-state">Status: Idle</span>
+        <span id="status-audio">Audio: <span id="audio-meter">----</span></span>
+        <span id="status-payload"><span id="payload-size">0</span>/140 B</span>
+      </div>
+    </footer>
+  </div>
+
+  <script type="module" src="./main.ts"></script>
+</body>
+</html>

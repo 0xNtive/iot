@@ -1,0 +1,44 @@
+{
+  "name": "wavepx",
+  "version": "0.1.0",
+  "description": "Transmit QR codes & pixel art over sound",
+  "type": "module",
+  "main": "dist/lib/index.js",
+  "types": "dist/lib/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/lib/index.js",
+      "types": "./dist/lib/index.d.ts"
+    }
+  },
+  "files": [
+    "dist/lib"
+  ],
+  "scripts": {
+    "dev": "vite --config vite.config.app.ts",
+    "build:lib": "vite build --config vite.config.lib.ts && tsc --emitDeclarationOnly --outDir dist/lib",
+    "build:app": "vite build --config vite.config.app.ts",
+    "build": "npm run build:lib && npm run build:app",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "preview": "vite preview --config vite.config.app.ts"
+  },
+  "keywords": [
+    "ggwave",
+    "qr-code",
+    "pixel-art",
+    "data-over-sound",
+    "sonic",
+    "audio"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "vite": "^6.0.0",
+    "vitest": "^3.0.0"
+  },
+  "dependencies": {
+    "ggwave": "^0.4.0",
+    "qrcode": "^1.5.4"
+  }
+}
