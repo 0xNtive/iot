@@ -1,14 +1,23 @@
 import { SonicState } from '../../lib/types.js';
+import { Visualizer } from './visualizer.js';
 
 export class StatusBar {
   private stateEl: HTMLElement;
-  private meterEl: HTMLElement;
   private payloadEl: HTMLElement;
+  private transferBar: HTMLElement;
+  private transferFill: HTMLElement;
+  private transferText: HTMLElement;
+  private visualizer: Visualizer;
 
   constructor() {
     this.stateEl = document.getElementById('status-state')!;
-    this.meterEl = document.getElementById('audio-meter')!;
     this.payloadEl = document.getElementById('payload-size')!;
+    this.transferBar = document.getElementById('transfer-bar')!;
+    this.transferFill = document.getElementById('transfer-fill')!;
+    this.transferText = document.getElementById('transfer-text')!;
+
+    const canvas = document.getElementById('audio-visualizer') as HTMLCanvasElement;
+    this.visualizer = new Visualizer(canvas);
   }
 
   setState(state: SonicState): void {
@@ -22,11 +31,17 @@ export class StatusBar {
     this.stateEl.style.color = state === SonicState.Error ? '#ff0066' :
       state === SonicState.Sending ? '#ffaa00' :
       state === SonicState.Listening ? '#00ff88' : '';
+
+    this.visualizer.setSending(state === SonicState.Sending);
+
+    if (state !== SonicState.Sending) {
+      this.transferBar.hidden = true;
+      this.visualizer.setChunkProgress(0);
+    }
   }
 
   setAudioLevel(level: number): void {
-    const bars = Math.min(8, Math.floor(level * 80));
-    this.meterEl.textContent = '|'.repeat(bars) + '-'.repeat(8 - bars);
+    this.visualizer.setAudioLevel(level);
   }
 
   setPayloadSize(size: number): void {
@@ -35,7 +50,15 @@ export class StatusBar {
   }
 
   setSendProgress(sent: number, total: number): void {
-    this.stateEl.textContent = `Sending chunk ${sent}/${total}`;
+    this.stateEl.textContent = `Sending ${sent}/${total}`;
     this.stateEl.style.color = '#ffaa00';
+
+    if (total > 1) {
+      this.transferBar.hidden = false;
+      const pct = (sent / total * 100).toFixed(0);
+      this.transferFill.style.width = `${pct}%`;
+      this.transferText.textContent = `CHUNK ${sent} OF ${total}`;
+      this.visualizer.setChunkProgress(sent / total);
+    }
   }
 }

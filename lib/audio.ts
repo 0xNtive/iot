@@ -114,3 +114,81 @@ export class AudioManager {
     }
   }
 }
+
+/**
+ * Convert ggwave raw waveform(s) into a downloadable WAV file.
+ * Accepts one or more Uint8Array waveforms (Float32 PCM at 48kHz).
+ * Concatenates them with silence gaps between chunks.
+ */
+export function waveformsToWav(waveforms: Uint8Array[], gapMs = 50): Blob {
+  const sampleRate = SAMPLE_RATE;
+  const gapSamples = Math.floor(sampleRate * gapMs / 1000);
+
+  // Calculate total samples
+  let totalSamples = 0;
+  for (const wf of waveforms) {
+    totalSamples += Math.floor(wf.length / 4); // Float32 = 4 bytes
+    totalSamples += gapSamples;
+  }
+  if (waveforms.length > 0) totalSamples -= gapSamples; // no trailing gap
+
+  // Convert all Float32 waveforms to Int16
+  const int16 = new Int16Array(totalSamples);
+  let offset = 0;
+
+  for (let w = 0; w < waveforms.length; w++) {
+    const wf = waveforms[w];
+    const numSamples = Math.floor(wf.length / 4);
+    const aligned = new ArrayBuffer(numSamples * 4);
+    new Uint8Array(aligned).set(wf.subarray(0, numSamples * 4));
+    const float32 = new Float32Array(aligned);
+
+    for (let i = 0; i < float32.length; i++) {
+      const s = Math.max(-1, Math.min(1, float32[i]));
+      int16[offset++] = s < 0 ? s * 0x8000 : s * 0x7fff;
+    }
+
+    // Add silence gap (except after last chunk)
+    if (w < waveforms.length - 1) {
+      for (let i = 0; i < gapSamples; i++) {
+        int16[offset++] = 0;
+      }
+    }
+  }
+
+  // Build WAV
+  const dataSize = int16.length * 2;
+  const buffer = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(buffer);
+
+  // RIFF header
+  writeString(view, 0, 'RIFF');
+  view.setUint32(4, 36 + dataSize, true);
+  writeString(view, 8, 'WAVE');
+
+  // fmt chunk
+  writeString(view, 12, 'fmt ');
+  view.setUint32(16, 16, true);        // chunk size
+  view.setUint16(20, 1, true);         // PCM
+  view.setUint16(22, 1, true);         // mono
+  view.setUint32(24, sampleRate, true); // sample rate
+  view.setUint32(28, sampleRate * 2, true); // byte rate
+  view.setUint16(32, 2, true);         // block align
+  view.setUint16(34, 16, true);        // bits per sample
+
+  // data chunk
+  writeString(view, 36, 'data');
+  view.setUint32(40, dataSize, true);
+
+  const wavBytes = new Uint8Array(buffer);
+  const int16Bytes = new Uint8Array(int16.buffer);
+  wavBytes.set(int16Bytes, 44);
+
+  return new Blob([wavBytes], { type: 'audio/wav' });
+}
+
+function writeString(view: DataView, offset: number, str: string): void {
+  for (let i = 0; i < str.length; i++) {
+    view.setUint8(offset + i, str.charCodeAt(i));
+  }
+}
