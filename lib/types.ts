@@ -56,7 +56,8 @@ export interface ChunkedImgMessage {
   type: FrameType.CHUNK;
   width: number;
   height: number;
-  pixels: boolean[];
+  bitDepth: number;
+  pixels: number[];  // values 0 to 2^bitDepth - 1
 }
 
 export type SonicMessage = QrMessage | ImgMessage | TxtMessage | ChunkedImgMessage;
@@ -66,7 +67,7 @@ export interface SonicPixelConfig {
   onError?: (err: Error) => void;
   onStateChange?: (state: SonicState) => void;
   onAudioLevel?: (level: number) => void;
-  onChunkProgress?: (pixels: boolean[], width: number, height: number, progress: number) => void;
+  onChunkProgress?: (pixels: number[], width: number, height: number, bitDepth: number, progress: number) => void;
   protocol?: SonicProtocol;
   volume?: number;
 }

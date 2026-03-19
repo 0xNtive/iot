@@ -1,5 +1,5 @@
-import { rleEncode, rleDecode } from './rle.js';
-import { packBits, unpackBits } from './bitpack.js';
+import { rleEncode, rleDecode, rleEncodeGray, rleDecodeGray } from './rle.js';
+import { packBits, unpackBits, packValues, unpackValues } from './bitpack.js';
 import { MAX_PAYLOAD, PROTOCOL_VERSION } from './constants.js';
 
 /**
@@ -9,7 +9,9 @@ import { MAX_PAYLOAD, PROTOCOL_VERSION } from './constants.js';
  *   Byte 0:    0x04 (CHUNK type)
  *   Byte 1:    Chunk index (0-255)
  *   Byte 2:    Total chunks (1-255)
- *   Byte 3:    Flags [compression:2][reserved:6]
+ *   Byte 3:    Flags [compression:2][bitDepth:2][reserved:4]
+ *              compression: 00=raw, 01=RLE-1bit, 10=RLE-gray
+ *              bitDepth:    00=1bit, 01=2bit, 10=4bit
  *
  * First chunk (index 0) — includes image dimensions:
  *   Byte 4:    Width high byte
@@ -25,42 +27,86 @@ import { MAX_PAYLOAD, PROTOCOL_VERSION } from './constants.js';
  */
 
 export const CHUNK_TYPE = 0x04;
-const FIRST_HEADER = 9;     // type + index + total + flags + w(2) + h(2) + version
-const NEXT_HEADER = 5;      // type + index + total + flags + version
+const FIRST_HEADER = 9;
+const NEXT_HEADER = 5;
 const FIRST_PAYLOAD = MAX_PAYLOAD - FIRST_HEADER;  // 131
 const NEXT_PAYLOAD = MAX_PAYLOAD - NEXT_HEADER;    // 135
 
 export const enum Compression {
   Raw = 0,
   RLE = 1,
+  RLEGray = 2,
+}
+
+export const enum BitDepth {
+  Mono = 0,   // 1-bit
+  Gray4 = 1,  // 2-bit (4 levels)
+  Gray16 = 2, // 4-bit (16 levels)
 }
 
 export interface ChunkFrame {
   index: number;
   total: number;
   compression: Compression;
-  width: number;   // only meaningful on index 0
-  height: number;  // only meaningful on index 0
+  bitDepth: BitDepth;
+  width: number;
+  height: number;
   payload: Uint8Array;
 }
 
 /**
- * Encode an image into chunk frames ready for sequential transmission.
- * Automatically picks RLE vs raw based on which is smaller.
+ * Encode a 1-bit (B&W) image into chunks.
  */
 export function encodeChunkedImage(
   width: number,
   height: number,
   pixels: boolean[],
 ): Uint8Array[] {
-  // Try both encodings, pick smaller
   const raw = packBits(pixels);
   const rle = rleEncode(pixels);
   const useRle = rle.length < raw.length;
   const data = useRle ? rle : raw;
   const compression = useRle ? Compression.RLE : Compression.Raw;
 
-  // Split data into chunks
+  return buildChunks(width, height, data, compression, BitDepth.Mono);
+}
+
+/**
+ * Encode a grayscale image into chunks.
+ * pixels: array of quantized values (0 to 2^bitDepth - 1).
+ * bitDepth: 1, 2, or 4.
+ */
+export function encodeChunkedGrayImage(
+  width: number,
+  height: number,
+  pixels: number[],
+  bitDepth: 1 | 2 | 4,
+): Uint8Array[] {
+  const bd: BitDepth = bitDepth === 1 ? BitDepth.Mono : bitDepth === 2 ? BitDepth.Gray4 : BitDepth.Gray16;
+
+  if (bitDepth === 1) {
+    // Use the optimized 1-bit path
+    return encodeChunkedImage(width, height, pixels.map(v => v > 0));
+  }
+
+  // Try raw packing and gray RLE, pick smaller
+  const raw = packValues(pixels, bitDepth);
+  const rle = rleEncodeGray(pixels);
+  const useRle = rle.length < raw.length;
+  const data = useRle ? rle : raw;
+  const compression = useRle ? Compression.RLEGray : Compression.Raw;
+
+  return buildChunks(width, height, data, compression, bd);
+}
+
+function buildChunks(
+  width: number,
+  height: number,
+  data: Uint8Array,
+  compression: Compression,
+  bitDepth: BitDepth,
+): Uint8Array[] {
+  const flags = ((compression & 0x03) << 6) | ((bitDepth & 0x03) << 4);
   const chunks: Uint8Array[] = [];
   let offset = 0;
 
@@ -68,9 +114,7 @@ export function encodeChunkedImage(
   const firstSize = Math.min(data.length, FIRST_PAYLOAD);
   const firstFrame = new Uint8Array(FIRST_HEADER + firstSize);
   firstFrame[0] = CHUNK_TYPE;
-  firstFrame[1] = 0; // index — filled after we know total
-  firstFrame[2] = 0; // total — filled after
-  firstFrame[3] = (compression & 0x03) << 6;
+  firstFrame[3] = flags;
   firstFrame[4] = (width >> 8) & 0xff;
   firstFrame[5] = width & 0xff;
   firstFrame[6] = (height >> 8) & 0xff;
@@ -85,16 +129,14 @@ export function encodeChunkedImage(
     const size = Math.min(data.length - offset, NEXT_PAYLOAD);
     const frame = new Uint8Array(NEXT_HEADER + size);
     frame[0] = CHUNK_TYPE;
-    frame[1] = chunks.length; // index
-    frame[2] = 0; // total — filled after
-    frame[3] = (compression & 0x03) << 6;
+    frame[3] = flags;
     frame[4] = PROTOCOL_VERSION;
     frame.set(data.subarray(offset, offset + size), NEXT_HEADER);
     offset += size;
     chunks.push(frame);
   }
 
-  // Fill in total count and index
+  // Fill in index and total
   const total = chunks.length;
   for (let i = 0; i < total; i++) {
     chunks[i][1] = i;
@@ -104,9 +146,6 @@ export function encodeChunkedImage(
   return chunks;
 }
 
-/**
- * Decode a single chunk frame from raw bytes.
- */
 export function decodeChunkFrame(data: Uint8Array): ChunkFrame {
   if (data.length < NEXT_HEADER) {
     throw new Error('Chunk frame too short');
@@ -118,6 +157,7 @@ export function decodeChunkFrame(data: Uint8Array): ChunkFrame {
   const index = data[1];
   const total = data[2];
   const compression: Compression = (data[3] >> 6) & 0x03;
+  const bitDepth: BitDepth = (data[3] >> 4) & 0x03;
 
   let width = 0;
   let height = 0;
@@ -134,7 +174,14 @@ export function decodeChunkFrame(data: Uint8Array): ChunkFrame {
     payload = data.slice(NEXT_HEADER);
   }
 
-  return { index, total, compression, width, height, payload };
+  return { index, total, compression, bitDepth, width, height, payload };
+}
+
+export interface ChunkResult {
+  width: number;
+  height: number;
+  pixels: number[];
+  bitDepth: BitDepth;
 }
 
 /**
@@ -146,50 +193,45 @@ export class ChunkAssembler {
   private width = 0;
   private height = 0;
   private compression: Compression = Compression.Raw;
-  private onProgress?: (pixels: boolean[], width: number, height: number, progress: number) => void;
+  private bitDepth: BitDepth = BitDepth.Mono;
+  private onProgress?: (pixels: number[], width: number, height: number, bitDepth: BitDepth, progress: number) => void;
 
-  constructor(onProgress?: (pixels: boolean[], width: number, height: number, progress: number) => void) {
+  constructor(onProgress?: (pixels: number[], width: number, height: number, bitDepth: BitDepth, progress: number) => void) {
     this.onProgress = onProgress;
   }
 
-  /**
-   * Feed a decoded chunk frame. Returns the complete image if all chunks received, null otherwise.
-   */
-  addChunk(chunk: ChunkFrame): { width: number; height: number; pixels: boolean[] } | null {
+  addChunk(chunk: ChunkFrame): ChunkResult | null {
     if (chunk.index === 0) {
-      // First chunk — reset state for new image
       this.chunks.clear();
       this.total = chunk.total;
       this.width = chunk.width;
       this.height = chunk.height;
       this.compression = chunk.compression;
+      this.bitDepth = chunk.bitDepth;
     }
 
     this.chunks.set(chunk.index, chunk.payload);
 
-    // Progressive render with what we have so far
     if (this.width > 0 && this.height > 0) {
       const partial = this.assemblePartial();
       const progress = this.chunks.size / this.total;
-      this.onProgress?.(partial, this.width, this.height, progress);
+      this.onProgress?.(partial, this.width, this.height, this.bitDepth, progress);
     }
 
-    // Check if complete
     if (this.chunks.size === this.total) {
       const pixels = this.assemblePartial();
-      return { width: this.width, height: this.height, pixels };
+      return { width: this.width, height: this.height, pixels, bitDepth: this.bitDepth };
     }
 
     return null;
   }
 
-  private assemblePartial(): boolean[] {
-    // Concatenate chunks in order (only contiguous from 0)
+  private assemblePartial(): number[] {
     const parts: Uint8Array[] = [];
     let totalLen = 0;
     for (let i = 0; i < this.total; i++) {
       const chunk = this.chunks.get(i);
-      if (!chunk) break; // Stop at first gap
+      if (!chunk) break;
       parts.push(chunk);
       totalLen += chunk.length;
     }
@@ -202,10 +244,21 @@ export class ChunkAssembler {
     }
 
     const totalPixels = this.width * this.height;
-    if (this.compression === Compression.RLE) {
-      return rleDecode(combined, totalPixels);
-    } else {
-      return unpackBits(combined, totalPixels);
+    const actualBitDepth = this.bitDepth === BitDepth.Gray4 ? 2 : this.bitDepth === BitDepth.Gray16 ? 4 : 1;
+
+    switch (this.compression) {
+      case Compression.RLE:
+        // 1-bit RLE → convert booleans to numbers
+        return rleDecode(combined, totalPixels).map(b => b ? 1 : 0);
+      case Compression.RLEGray:
+        return rleDecodeGray(combined, totalPixels);
+      case Compression.Raw:
+        if (actualBitDepth === 1) {
+          return unpackBits(combined, totalPixels).map(b => b ? 1 : 0);
+        }
+        return unpackValues(combined, totalPixels, actualBitDepth);
+      default:
+        return unpackBits(combined, totalPixels).map(b => b ? 1 : 0);
     }
   }
 

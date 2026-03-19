@@ -35,10 +35,7 @@ export class ReceiveDisplay {
     }
   }
 
-  /**
-   * Progressive render for chunked image — called on each chunk arrival.
-   */
-  showProgress(pixels: boolean[], width: number, height: number, progress: number): void {
+  showProgress(pixels: number[], width: number, height: number, bitDepth: number, progress: number): void {
     if (!this.progressCanvas) {
       this.container.innerHTML = '';
       this.progressCanvas = document.createElement('canvas');
@@ -48,11 +45,11 @@ export class ReceiveDisplay {
       this.container.appendChild(this.progressCanvas);
     }
 
-    this.renderPixels(this.progressCtx!, width, height, pixels);
+    const levels = 1 << bitDepth;
+    this.renderGrayPixels(this.progressCtx!, width, height, pixels, levels);
 
     const pct = Math.round(progress * 100);
-    const onCount = pixels.filter(Boolean).length;
-    this.info.textContent = `Receiving ${width}x${height} — ${pct}% (${onCount} px)`;
+    this.info.textContent = `Receiving ${width}x${height} ${levels > 2 ? levels + '-gray' : 'B&W'} — ${pct}%`;
   }
 
   private renderQr(msg: QrMessage): void {
@@ -84,9 +81,9 @@ export class ReceiveDisplay {
     canvas.width = DISPLAY_PX;
     canvas.height = DISPLAY_PX;
     const ctx = canvas.getContext('2d')!;
-    this.renderPixels(ctx, msg.width, msg.height, msg.pixels);
+    this.renderGrayPixels(ctx, msg.width, msg.height, msg.pixels.map(b => b ? 1 : 0), 2);
     this.container.appendChild(canvas);
-    this.info.textContent = `Image ${msg.width}x${msg.height} (${msg.pixels.filter(Boolean).length} px on)`;
+    this.info.textContent = `Image ${msg.width}x${msg.height}`;
   }
 
   private renderChunkedImg(msg: ChunkedImgMessage): void {
@@ -94,56 +91,58 @@ export class ReceiveDisplay {
     canvas.width = DISPLAY_PX;
     canvas.height = DISPLAY_PX;
     const ctx = canvas.getContext('2d')!;
-    this.renderPixels(ctx, msg.width, msg.height, msg.pixels);
+    const levels = 1 << msg.bitDepth;
+    this.renderGrayPixels(ctx, msg.width, msg.height, msg.pixels, levels);
     this.container.appendChild(canvas);
-    this.info.textContent = `Image ${msg.width}x${msg.height} (${msg.pixels.filter(Boolean).length} px on) — complete`;
+    this.info.textContent = `Image ${msg.width}x${msg.height} ${levels > 2 ? levels + '-gray' : 'B&W'} — complete`;
   }
 
-  private renderPixels(ctx: CanvasRenderingContext2D, width: number, height: number, pixels: boolean[]): void {
+  private renderGrayPixels(
+    ctx: CanvasRenderingContext2D,
+    width: number,
+    height: number,
+    pixels: number[],
+    levels: number,
+  ): void {
     const maxDim = Math.max(width, height);
     const cellSize = DISPLAY_PX / maxDim;
     const offsetX = (DISPLAY_PX - cellSize * width) / 2;
     const offsetY = (DISPLAY_PX - cellSize * height) / 2;
+    const maxVal = levels - 1;
 
-    ctx.fillStyle = '#1a1a25';
-    ctx.fillRect(0, 0, DISPLAY_PX, DISPLAY_PX);
+    // Use ImageData for performance on larger images
+    const imgData = ctx.createImageData(DISPLAY_PX, DISPLAY_PX);
+    const d = imgData.data;
+    // Fill background
+    for (let i = 0; i < d.length; i += 4) {
+      d[i] = 0x1a; d[i+1] = 0x1a; d[i+2] = 0x25; d[i+3] = 0xff;
+    }
 
-    // For large images, use ImageData for performance
-    if (maxDim > 64) {
-      const imgData = ctx.createImageData(DISPLAY_PX, DISPLAY_PX);
-      const d = imgData.data;
-      // Fill background
-      for (let i = 0; i < d.length; i += 4) {
-        d[i] = 0x1a; d[i+1] = 0x1a; d[i+2] = 0x25; d[i+3] = 0xff;
-      }
-      // Draw pixels
-      for (let row = 0; row < height; row++) {
-        for (let col = 0; col < width; col++) {
-          if (pixels[row * width + col]) {
-            const px0 = Math.floor(offsetX + col * cellSize);
-            const py0 = Math.floor(offsetY + row * cellSize);
-            const px1 = Math.floor(offsetX + (col + 1) * cellSize);
-            const py1 = Math.floor(offsetY + (row + 1) * cellSize);
-            for (let py = py0; py < py1 && py < DISPLAY_PX; py++) {
-              for (let px = px0; px < px1 && px < DISPLAY_PX; px++) {
-                const idx = (py * DISPLAY_PX + px) * 4;
-                d[idx] = 0x00; d[idx+1] = 0xff; d[idx+2] = 0x88; d[idx+3] = 0xff;
-              }
-            }
-          }
-        }
-      }
-      ctx.putImageData(imgData, 0, 0);
-    } else {
-      for (let row = 0; row < height; row++) {
-        for (let col = 0; col < width; col++) {
-          if (pixels[row * width + col]) {
-            ctx.fillStyle = '#00ff88';
-            ctx.fillRect(offsetX + col * cellSize, offsetY + row * cellSize, cellSize, cellSize);
+    for (let row = 0; row < height; row++) {
+      for (let col = 0; col < width; col++) {
+        const val = pixels[row * width + col];
+        if (val <= 0) continue;
+
+        const brightness = maxVal > 0 ? val / maxVal : 1;
+        const r = 0;
+        const g = Math.round(0x88 + (0xff - 0x88) * brightness);
+        const b = Math.round(0x88 * brightness);
+
+        const px0 = Math.floor(offsetX + col * cellSize);
+        const py0 = Math.floor(offsetY + row * cellSize);
+        const px1 = Math.floor(offsetX + (col + 1) * cellSize);
+        const py1 = Math.floor(offsetY + (row + 1) * cellSize);
+
+        for (let py = py0; py < py1 && py < DISPLAY_PX; py++) {
+          for (let px = px0; px < px1 && px < DISPLAY_PX; px++) {
+            if (px < 0 || py < 0) continue;
+            const idx = (py * DISPLAY_PX + px) * 4;
+            d[idx] = r; d[idx+1] = g; d[idx+2] = b; d[idx+3] = 0xff;
           }
         }
       }
     }
+    ctx.putImageData(imgData, 0, 0);
   }
 
   private renderTxt(msg: TxtMessage): void {

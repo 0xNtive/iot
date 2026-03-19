@@ -1,7 +1,7 @@
 import { SonicPixel } from '../lib/wavepx.js';
-import { encodeChunkedImage } from '../lib/chunked.js';
-import { rleEncode } from '../lib/rle.js';
-import { packBits } from '../lib/bitpack.js';
+import { encodeChunkedImage, encodeChunkedGrayImage } from '../lib/chunked.js';
+import { rleEncode, rleEncodeGray } from '../lib/rle.js';
+import { packBits, packValues } from '../lib/bitpack.js';
 import {
   FrameType,
   SonicState,
@@ -43,21 +43,38 @@ function updateChunkInfo(): void {
 
   const size = pixelCanvas.getGridSize();
   const pixels = pixelCanvas.getPixels();
-  const raw = packBits(pixels);
-  const rle = rleEncode(pixels);
-  const useRle = rle.length < raw.length;
-  const dataSize = useRle ? rle.length : raw.length;
-  const chunks = encodeChunkedImage(size, size, pixels);
-  const ratio = raw.length > 0 ? (dataSize / raw.length * 100).toFixed(0) : '100';
+  const bitDepth = pixelCanvas.getBitDepth();
+  const levels = pixelCanvas.getGrayLevels();
+
+  let rawSize: number;
+  let rleSize: number;
+  let chunks: Uint8Array[];
+
+  if (bitDepth === 1) {
+    const bw = pixels.map(v => v > 0);
+    rawSize = packBits(bw).length;
+    rleSize = rleEncode(bw).length;
+    chunks = encodeChunkedImage(size, size, bw);
+  } else {
+    rawSize = packValues(pixels, bitDepth).length;
+    rleSize = rleEncodeGray(pixels).length;
+    chunks = encodeChunkedGrayImage(size, size, pixels, bitDepth);
+  }
+
+  const dataSize = Math.min(rawSize, rleSize);
+  const useRle = rleSize < rawSize;
+  const ratio = rawSize > 0 ? (dataSize / rawSize * 100).toFixed(0) : '100';
 
   statusBar.setPayloadSize(dataSize);
 
+  const modeLabel = levels > 2 ? `${levels}-gray` : 'B&W';
+
   if (chunks.length === 1) {
     chunkEl.textContent = '(1 frame)';
-    infoEl.textContent = `${useRle ? 'RLE' : 'Raw'} ${dataSize}B — ${ratio}% of raw`;
+    infoEl.textContent = `${modeLabel} ${useRle ? 'RLE' : 'Raw'} ${dataSize}B — ${ratio}% of raw`;
   } else {
     chunkEl.textContent = `(${chunks.length} chunks)`;
-    infoEl.textContent = `${useRle ? 'RLE' : 'Raw'} ${dataSize}B — ${ratio}% of raw ${raw.length}B`;
+    infoEl.textContent = `${modeLabel} ${useRle ? 'RLE' : 'Raw'} ${dataSize}B — ${ratio}% of raw ${rawSize}B`;
   }
 }
 
@@ -88,28 +105,30 @@ function initComponents(): void {
   receiveDisplay = new ReceiveDisplay();
   statusBar = new StatusBar();
 
-  // Grid size selector
   const gridSelect = document.getElementById('grid-size') as HTMLSelectElement;
   gridSelect.addEventListener('change', () => {
-    const size = parseInt(gridSelect.value);
-    pixelCanvas.setGridSize(size);
+    pixelCanvas.setGridSize(parseInt(gridSelect.value));
     updateChunkInfo();
   });
 
-  // Clear button
+  const graySelect = document.getElementById('gray-levels') as HTMLSelectElement;
+  graySelect.addEventListener('change', () => {
+    pixelCanvas.setGrayLevels(parseInt(graySelect.value));
+    updateChunkInfo();
+  });
+
   document.getElementById('clear-canvas')!.addEventListener('click', () => {
     pixelCanvas.clear();
     updateChunkInfo();
   });
 
-  // Image upload
   const imageUpload = document.getElementById('image-upload') as HTMLInputElement;
   imageUpload.addEventListener('change', async () => {
     const file = imageUpload.files?.[0];
     if (!file) return;
     await pixelCanvas.loadImage(file);
     updateChunkInfo();
-    imageUpload.value = ''; // reset so same file can be re-selected
+    imageUpload.value = '';
   });
 
   controls = new Controls({
@@ -138,8 +157,8 @@ async function initSonic(): Promise<void> {
     onAudioLevel: (level: number) => {
       statusBar.setAudioLevel(level);
     },
-    onChunkProgress: (pixels, width, height, progress) => {
-      receiveDisplay.showProgress(pixels, width, height, progress);
+    onChunkProgress: (pixels, width, height, bitDepth, progress) => {
+      receiveDisplay.showProgress(pixels, width, height, bitDepth, progress);
     },
     protocol: SonicProtocol.AudibleFast,
     volume: 50,
@@ -151,9 +170,7 @@ async function initSonic(): Promise<void> {
 
 async function toggleListening(): Promise<void> {
   try {
-    if (!sonic) {
-      await initSonic();
-    }
+    if (!sonic) await initSonic();
 
     if (isListening) {
       sonic!.stopListening();
@@ -171,35 +188,37 @@ async function toggleListening(): Promise<void> {
 }
 
 async function handleSend(): Promise<void> {
-  if (!sonic) {
-    await initSonic();
-  }
+  if (!sonic) await initSonic();
 
   try {
     switch (activeTab) {
       case 'draw': {
         const size = pixelCanvas.getGridSize();
-        await sonic!.sendChunkedImage(
-          size, size, pixelCanvas.getPixels(),
-          (sent, total) => statusBar.setSendProgress(sent, total),
-        );
+        const bitDepth = pixelCanvas.getBitDepth();
+        const pixels = pixelCanvas.getPixels();
+
+        if (bitDepth === 1) {
+          await sonic!.sendChunkedImage(
+            size, size, pixels.map(v => v > 0),
+            (sent, total) => statusBar.setSendProgress(sent, total),
+          );
+        } else {
+          await sonic!.sendGrayImage(
+            size, size, pixels, bitDepth,
+            (sent, total) => statusBar.setSendProgress(sent, total),
+          );
+        }
         break;
       }
       case 'qr': {
         const msg = qrPanel.getMessage();
-        if (!msg) {
-          alert('Enter text to generate a QR code first');
-          return;
-        }
+        if (!msg) { alert('Enter text to generate a QR code first'); return; }
         await sonic!.send(msg);
         break;
       }
       case 'text': {
         const text = textPanel.getText();
-        if (!text) {
-          alert('Enter text to send');
-          return;
-        }
+        if (!text) { alert('Enter text to send'); return; }
         await sonic!.sendText(text);
         break;
       }

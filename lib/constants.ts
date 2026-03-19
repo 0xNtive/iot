@@ -16,3 +16,4 @@ export const MAX_IMG_DIMENSION = 32;
 export const MAX_TEXT_BYTES = MAX_PAYLOAD - 2; // 138 bytes for TXT
 
 export const SEND_SILENCE_BUFFER_MS = 200;
+export const CHUNK_SILENCE_BUFFER_MS = 50; // shorter gap between chunks (not listening during send)

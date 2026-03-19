@@ -1,14 +1,11 @@
 /**
- * Run-Length Encoding for monochrome pixel data.
- *
- * Each byte encodes one run:
- *   Bit 7 (MSB): color (0 = off, 1 = on)
- *   Bits 6-0:    run length (1-127)
- *
- * Example: 0x05 = 5 off-pixels, 0x83 = 3 on-pixels
+ * Run-Length Encoding for monochrome and grayscale pixel data.
  */
 
-const MAX_RUN = 127;
+// === 1-bit (B&W) RLE ===
+// Each byte: [color:1 bit (MSB)][length:7 bits (1-127)]
+
+const MAX_RUN_1BIT = 127;
 const COLOR_BIT = 0x80;
 
 export function rleEncode(pixels: boolean[]): Uint8Array {
@@ -19,7 +16,7 @@ export function rleEncode(pixels: boolean[]): Uint8Array {
   let count = 1;
 
   for (let i = 1; i < pixels.length; i++) {
-    if (pixels[i] === current && count < MAX_RUN) {
+    if (pixels[i] === current && count < MAX_RUN_1BIT) {
       count++;
     } else {
       runs.push(current ? (COLOR_BIT | count) : count);
@@ -27,7 +24,6 @@ export function rleEncode(pixels: boolean[]): Uint8Array {
       count = 1;
     }
   }
-  // Flush last run
   runs.push(current ? (COLOR_BIT | count) : count);
 
   return new Uint8Array(runs);
@@ -49,7 +45,6 @@ export function rleDecode(encoded: Uint8Array, totalPixels: number): boolean[] {
     pos = end;
   }
 
-  // Fill remaining with false (in case of incomplete data / progressive)
   for (let i = pos; i < totalPixels; i++) {
     pixels[i] = false;
   }
@@ -57,10 +52,78 @@ export function rleDecode(encoded: Uint8Array, totalPixels: number): boolean[] {
   return pixels;
 }
 
+// === Grayscale RLE ===
+// Each run is 2 bytes: [value (0-255)][length (1-255)]
+
+const MAX_RUN_GRAY = 255;
+
+export function rleEncodeGray(pixels: number[]): Uint8Array {
+  if (pixels.length === 0) return new Uint8Array(0);
+
+  const runs: number[] = [];
+  let current = pixels[0];
+  let count = 1;
+
+  for (let i = 1; i < pixels.length; i++) {
+    if (pixels[i] === current && count < MAX_RUN_GRAY) {
+      count++;
+    } else {
+      runs.push(current, count);
+      current = pixels[i];
+      count = 1;
+    }
+  }
+  runs.push(current, count);
+
+  return new Uint8Array(runs);
+}
+
+export function rleDecodeGray(encoded: Uint8Array, totalPixels: number): number[] {
+  const pixels: number[] = new Array(totalPixels);
+  let pos = 0;
+
+  for (let i = 0; i + 1 < encoded.length && pos < totalPixels; i += 2) {
+    const value = encoded[i];
+    const length = encoded[i + 1];
+
+    const end = Math.min(pos + length, totalPixels);
+    for (let j = pos; j < end; j++) {
+      pixels[j] = value;
+    }
+    pos = end;
+  }
+
+  for (let i = pos; i < totalPixels; i++) {
+    pixels[i] = 0;
+  }
+
+  return pixels;
+}
+
+// === Quantization ===
+
 /**
- * Returns the compression ratio (encoded / raw).
- * Values < 1.0 mean compression saved space.
+ * Quantize grayscale values to N levels (2, 4, 8, 16).
+ * Merges nearby shades into the same bucket for better RLE compression.
  */
+export function quantize(pixels: number[], levels: number): number[] {
+  if (levels < 2) levels = 2;
+  const maxVal = levels - 1;
+  const step = 256 / levels;
+  return pixels.map(v => {
+    const bucket = Math.min(Math.floor(v / step), maxVal);
+    return bucket;
+  });
+}
+
+/**
+ * Expand quantized values back to 0-255 range for display.
+ */
+export function dequantize(pixels: number[], levels: number): number[] {
+  const maxVal = levels - 1;
+  return pixels.map(v => maxVal > 0 ? Math.round((v / maxVal) * 255) : 0);
+}
+
 export function rleRatio(pixels: boolean[]): number {
   const raw = Math.ceil(pixels.length / 8);
   const encoded = rleEncode(pixels);
