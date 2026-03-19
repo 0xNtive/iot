@@ -15,6 +15,7 @@
 
     <nav class="tabs">
       <button class="tab active" data-tab="draw">Draw</button>
+      <button class="tab" data-tab="image">Image</button>
       <button class="tab" data-tab="qr">QR Code</button>
       <button class="tab" data-tab="text">Text</button>
       <button class="tab" data-tab="arena">Arena</button>
@@ -49,21 +50,63 @@
                   <option value="color16">16 color</option>
                 </select>
               </label>
+              <button id="clear-canvas" class="btn-small">Clear</button>
+            </div>
+            <canvas id="pixel-canvas" width="320" height="320"></canvas>
+            <div id="chunk-info" class="chunk-info"></div>
+            <details class="edu-blurb">
+              <summary>How pixel encoding works</summary>
+              <div class="edu-content">
+                <p>Each pixel is packed into the minimum number of bits for the selected mode. In B&W mode, one bit per pixel — 8 pixels fit in a single byte. At 4 gray levels, each pixel needs 2 bits (4 per byte). At 16 levels, 4 bits each (2 per byte).</p>
+                <p>The encoder compares raw bit-packing against RLE (run-length encoding) and sends whichever is smaller. RLE replaces repeated values with a count+value pair, which works well for images with large solid areas.</p>
+              </div>
+            </details>
+          </div>
+
+          <!-- Image tab -->
+          <div class="tab-content" id="tab-image">
+            <div class="grid-controls">
+              <label>Grid:
+                <select id="image-grid-size">
+                  <option value="8">8x8</option>
+                  <option value="16" selected>16x16</option>
+                  <option value="24">24x24</option>
+                  <option value="32">32x32</option>
+                  <option value="64">64x64</option>
+                  <option value="128">128x128</option>
+                  <option value="256">256x256</option>
+                  <option value="512">512x512</option>
+                </select>
+              </label>
+              <label>Mode:
+                <select id="image-color-mode">
+                  <option value="bw" selected>B&W</option>
+                  <option value="gray4">4 gray</option>
+                  <option value="gray16">16 gray</option>
+                  <option value="color16">16 color</option>
+                </select>
+              </label>
               <label>Dither:
-                <select id="dither-mode">
+                <select id="image-dither-mode">
                   <option value="none">None</option>
                   <option value="floyd-steinberg">Floyd-Steinberg</option>
                   <option value="atkinson">Atkinson</option>
                 </select>
               </label>
-              <button id="clear-canvas" class="btn-small">Clear</button>
               <label class="btn-small upload-btn">
                 Load Image
                 <input type="file" id="image-upload" accept="image/*" hidden />
               </label>
             </div>
-            <canvas id="pixel-canvas" width="320" height="320"></canvas>
-            <div id="chunk-info" class="chunk-info"></div>
+            <canvas id="image-canvas" width="320" height="320"></canvas>
+            <div id="image-chunk-info" class="chunk-info"></div>
+            <details class="edu-blurb">
+              <summary>What is dithering?</summary>
+              <div class="edu-content">
+                <p>Dithering simulates shades your display can't actually show by carefully placing dots of the available colors. Instead of rounding each pixel to the nearest level (which loses detail), dithering spreads the rounding error to neighboring pixels.</p>
+                <p><strong>Floyd-Steinberg</strong> distributes error to 4 neighbors — smooth gradients, natural look. <strong>Atkinson</strong> spreads error to 6 neighbors but only 75% of it — higher contrast, great for pixel art. Try both on the same image to see the difference!</p>
+              </div>
+            </details>
           </div>
 
           <!-- QR tab -->
@@ -91,6 +134,13 @@
           <!-- Arena tab -->
           <div class="tab-content" id="tab-arena">
             <div id="arena-container"></div>
+            <details class="edu-blurb">
+              <summary>How compression strategies compare</summary>
+              <div class="edu-content">
+                <p><strong>Raw</strong> packs pixels into the minimum bits with no compression — fast but bulky. <strong>RLE</strong> (run-length encoding) replaces runs of identical values with count+value pairs — great for simple graphics with solid areas.</p>
+                <p><strong>Palette</strong> mode finds the 16 most representative colors in your image, then stores each pixel as a 4-bit index. Each row is further RLE-compressed. The arena shows the byte count and chunk count for each strategy so you can see which wins for your image.</p>
+              </div>
+            </details>
           </div>
 
           <!-- Game tab -->
@@ -98,19 +148,53 @@
             <div class="game-layout">
               <div class="game-grid-section">
                 <div class="game-grid-label">YOUR FLEET</div>
-                <canvas id="game-my-grid" width="256" height="256"></canvas>
+                <div class="game-grid-wrapper">
+                  <div class="game-col-labels">
+                    <span></span>
+                    <span>A</span><span>B</span><span>C</span><span>D</span>
+                    <span>E</span><span>F</span><span>G</span><span>H</span>
+                  </div>
+                  <div class="game-grid-row">
+                    <div class="game-row-labels">
+                      <span>1</span><span>2</span><span>3</span><span>4</span>
+                      <span>5</span><span>6</span><span>7</span><span>8</span>
+                    </div>
+                    <canvas id="game-my-grid" width="256" height="256"></canvas>
+                  </div>
+                </div>
               </div>
               <div class="game-grid-section">
                 <div class="game-grid-label">TARGET</div>
-                <canvas id="game-target-grid" width="256" height="256"></canvas>
+                <div class="game-grid-wrapper">
+                  <div class="game-col-labels">
+                    <span></span>
+                    <span>A</span><span>B</span><span>C</span><span>D</span>
+                    <span>E</span><span>F</span><span>G</span><span>H</span>
+                  </div>
+                  <div class="game-grid-row">
+                    <div class="game-row-labels">
+                      <span>1</span><span>2</span><span>3</span><span>4</span>
+                      <span>5</span><span>6</span><span>7</span><span>8</span>
+                    </div>
+                    <canvas id="game-target-grid" width="256" height="256"></canvas>
+                  </div>
+                </div>
               </div>
             </div>
             <div id="game-status" class="game-status">Place your ships</div>
+            <div id="game-ship-roster" class="game-ship-roster"></div>
             <div class="game-controls">
               <button id="game-rotate" class="btn-small">Rotate</button>
               <button id="game-ready" class="btn-small">Ready</button>
               <button id="game-new" class="btn-small">New Game</button>
             </div>
+            <details class="edu-blurb">
+              <summary>How the game protocol works</summary>
+              <div class="edu-content">
+                <p>Battleship over sound uses a simple frame protocol. Each message starts with a type byte (0x05 = game) and a subtype: <strong>SETUP</strong> (hash of ship positions for turn order), <strong>SHOT</strong> (x,y coordinates), <strong>RESULT</strong> (hit/miss/sunk), and <strong>WIN</strong>.</p>
+                <p>Turn order is decided by comparing placement hashes — the lower hash goes first. Each shot-result exchange is a two-frame round trip sent via audio. The entire game typically uses about 20-40 audio transmissions.</p>
+              </div>
+            </details>
           </div>
         </section>
 
@@ -160,6 +244,13 @@
         <canvas id="audio-visualizer" width="200" height="28"></canvas>
         <span id="status-payload"><span id="payload-size">0</span> B <span id="chunk-count"></span></span>
       </div>
+      <details class="edu-blurb edu-blurb-footer">
+        <summary>How ggwave encodes audio</summary>
+        <div class="edu-content">
+          <p>WAVEPX uses <strong>ggwave</strong>, which encodes data as audio tones using FSK (frequency-shift keying). Each byte is mapped to a specific frequency, and the receiver uses FFT to decode it back.</p>
+          <p><strong>Audible</strong> mode uses frequencies you can hear (~1-4 kHz) — good for demos. <strong>Ultrasound</strong> uses 15-20 kHz — nearly inaudible to most people. <strong>DT800</strong> uses dual-tone encoding for better noise resistance. Faster protocols pack more data per second but are more sensitive to noise.</p>
+        </div>
+      </details>
     </footer>
   </div>
 

@@ -487,6 +487,16 @@ select:focus {
   padding: 40px 0;
 }
 
+/* Image canvas */
+#image-canvas {
+  display: block;
+  width: 320px;
+  height: 320px;
+  border: 1px solid var(--border);
+  image-rendering: pixelated;
+  margin-top: 12px;
+}
+
 /* Game */
 .game-layout {
   display: flex;
@@ -507,6 +517,35 @@ select:focus {
   margin-bottom: 6px;
 }
 
+/* Coordinate labels */
+.game-grid-wrapper {
+  display: inline-block;
+}
+
+.game-col-labels {
+  display: grid;
+  grid-template-columns: 16px repeat(8, 1fr);
+  width: calc(160px + 16px);
+  font-size: 9px;
+  color: var(--text-dim);
+  text-align: center;
+  margin-bottom: 2px;
+}
+
+.game-grid-row {
+  display: flex;
+}
+
+.game-row-labels {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  width: 16px;
+  font-size: 9px;
+  color: var(--text-dim);
+  text-align: center;
+}
+
 #game-my-grid,
 #game-target-grid {
   display: block;
@@ -523,12 +562,117 @@ select:focus {
   text-align: center;
   margin: 10px 0 6px;
   min-height: 20px;
+  transition: color 0.2s;
 }
+
+.game-status-hit { color: #ff6644; }
+.game-status-miss { color: #6a6a7a; }
+.game-status-sunk { color: #ff0066; font-weight: 700; }
+.game-status-win { color: var(--accent); font-weight: 700; }
+.game-status-lose { color: #ff0044; font-weight: 700; }
+.game-status-info { color: var(--text); }
+
+/* Ship roster */
+.game-ship-roster {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.roster-ship {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+.roster-name {
+  margin-right: 2px;
+}
+
+.roster-cells {
+  display: flex;
+  gap: 2px;
+}
+
+.roster-cell {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  border: 1px solid var(--border);
+}
+
+.roster-cell-pending { background: var(--bg-input); }
+.roster-cell-ok { background: #00aa55; border-color: #00aa55; }
+.roster-cell-hit { background: #ff0044; border-color: #ff0044; }
+.roster-cell-sunk { background: #444; border-color: #555; }
+
+.roster-tag {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  padding: 1px 4px;
+  border-radius: 2px;
+  margin-left: 2px;
+}
+
+.roster-tag-ok { color: #00aa55; }
+.roster-tag-sunk { color: #ff0044; }
 
 .game-controls {
   display: flex;
   gap: 8px;
   justify-content: center;
+}
+
+/* Educational blurbs */
+.edu-blurb {
+  margin-top: 12px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.edu-blurb summary {
+  cursor: pointer;
+  color: var(--accent-dim);
+  letter-spacing: 0.5px;
+  padding: 4px 0;
+  list-style: none;
+}
+
+.edu-blurb summary::before {
+  content: '▸ ';
+  font-size: 10px;
+}
+
+.edu-blurb[open] summary::before {
+  content: '▾ ';
+}
+
+.edu-blurb summary:hover {
+  color: var(--accent);
+}
+
+.edu-content {
+  border-left: 2px solid var(--accent-dim);
+  padding: 8px 12px;
+  margin-top: 4px;
+  line-height: 1.5;
+}
+
+.edu-content p {
+  margin-bottom: 6px;
+}
+
+.edu-content p:last-child {
+  margin-bottom: 0;
+}
+
+.edu-blurb-footer {
+  margin-top: 8px;
 }
 
 /* Responsive */
@@ -542,6 +686,7 @@ select:focus {
   }
 
   #pixel-canvas,
+  #image-canvas,
   #qr-preview {
     width: 100%;
     max-width: 320px;

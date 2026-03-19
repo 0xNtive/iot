@@ -14,6 +14,7 @@ import {
   encodeChunkedPaletteImage,
 } from '../../lib/chunked.js';
 import { quantizeColors } from '../../lib/palette.js';
+import { ditherImage, type DitherAlgorithm } from '../../lib/dither.js';
 
 interface ArenaEntry {
   name: string;
@@ -34,19 +35,26 @@ export class ArenaPanel {
     this.container = document.getElementById(containerId)!;
   }
 
-  update(pixelCanvas: PixelCanvas): void {
+  update(pixelCanvas: PixelCanvas, ditherAlg?: DitherAlgorithm): void {
     const size = pixelCanvas.getGridSize();
     const pixels = pixelCanvas.getPixels();
     const rgba = pixelCanvas.getRgbaData();
+    const rawLuma = pixelCanvas.getRawLuma();
+    const alg = ditherAlg ?? pixelCanvas.getDitherAlgorithm();
     const totalPixels = size * size;
 
     const entries: ArenaEntry[] = [];
 
     // --- B&W strategies ---
-    const bw = pixels.map(v => v > 0);
+    let bwPixels: number[];
+    if (rawLuma) {
+      bwPixels = ditherImage(rawLuma, size, size, 2, alg);
+    } else {
+      bwPixels = pixels.map(v => v > 0 ? 1 : 0);
+    }
+    const bw = bwPixels.map(v => v > 0);
     const rawBW = packBits(bw);
     const rleBW = rleEncode(bw);
-    const bwPixels = bw.map(v => v ? 1 : 0);
 
     entries.push({
       name: 'Raw B&W',
@@ -67,7 +75,12 @@ export class ArenaPanel {
     });
 
     // --- 4-gray strategies ---
-    const gray4 = requantize(pixels, pixelCanvas.getGrayLevels(), 4);
+    let gray4: number[];
+    if (rawLuma) {
+      gray4 = ditherImage(rawLuma, size, size, 4, alg);
+    } else {
+      gray4 = requantize(pixels, pixelCanvas.getGrayLevels(), 4);
+    }
     const rawGray4 = packValues(gray4, 2);
     const rleGray4 = rleEncodeGray(gray4);
 
@@ -90,7 +103,12 @@ export class ArenaPanel {
     });
 
     // --- 16-gray strategies ---
-    const gray16 = requantize(pixels, pixelCanvas.getGrayLevels(), 16);
+    let gray16: number[];
+    if (rawLuma) {
+      gray16 = ditherImage(rawLuma, size, size, 16, alg);
+    } else {
+      gray16 = requantize(pixels, pixelCanvas.getGrayLevels(), 16);
+    }
     const rawGray16 = packValues(gray16, 4);
     const rleGray16 = rleEncodeGray(gray16);
 
@@ -120,7 +138,7 @@ export class ArenaPanel {
 
       entries.push({
         name: 'Palette 16-color',
-        rawBytes: totalPixels, // 1 byte per pixel uncompressed
+        rawBytes: totalPixels,
         encodedBytes: palBytes,
         chunks: palChunks.length,
         pixels: Array.from(palImg.indices),

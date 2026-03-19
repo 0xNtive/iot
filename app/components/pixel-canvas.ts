@@ -11,30 +11,33 @@ export class PixelCanvas {
   private colorMode = false;
   private rgbaData: Uint8Array | null = null; // raw RGBA for color quantization
   private rawLuma: Float64Array | null = null; // cached luminance for re-dithering
+  private sourceRgba: Uint8Array | null = null; // always stores RGBA from last loadImage()
   private ditherAlgorithm: DitherAlgorithm = 'none';
   private drawing = false;
   private drawValue = 0;
 
-  constructor(canvasId: string, initialSize = 16) {
+  constructor(canvasId: string, initialSize = 16, interactive = true) {
     this.canvas = document.getElementById(canvasId) as HTMLCanvasElement;
     this.ctx = this.canvas.getContext('2d')!;
     this.gridSize = initialSize;
     this.pixels = new Array(initialSize * initialSize).fill(0);
 
-    this.canvas.addEventListener('mousedown', (e) => this.onMouseDown(e));
-    this.canvas.addEventListener('mousemove', (e) => this.onMouseMove(e));
-    this.canvas.addEventListener('mouseup', () => this.drawing = false);
-    this.canvas.addEventListener('mouseleave', () => this.drawing = false);
+    if (interactive) {
+      this.canvas.addEventListener('mousedown', (e) => this.onMouseDown(e));
+      this.canvas.addEventListener('mousemove', (e) => this.onMouseMove(e));
+      this.canvas.addEventListener('mouseup', () => this.drawing = false);
+      this.canvas.addEventListener('mouseleave', () => this.drawing = false);
 
-    this.canvas.addEventListener('touchstart', (e) => {
-      e.preventDefault();
-      this.onMouseDown(e.touches[0]);
-    });
-    this.canvas.addEventListener('touchmove', (e) => {
-      e.preventDefault();
-      this.onMouseMove(e.touches[0]);
-    });
-    this.canvas.addEventListener('touchend', () => this.drawing = false);
+      this.canvas.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        this.onMouseDown(e.touches[0]);
+      });
+      this.canvas.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        this.onMouseMove(e.touches[0]);
+      });
+      this.canvas.addEventListener('touchend', () => this.drawing = false);
+    }
 
     this.render();
   }
@@ -43,6 +46,8 @@ export class PixelCanvas {
     this.gridSize = size;
     this.pixels = new Array(size * size).fill(0);
     this.rawLuma = null;
+    this.sourceRgba = null;
+    this.rgbaData = null;
     this.render();
   }
 
@@ -51,6 +56,11 @@ export class PixelCanvas {
       // Re-dither from cached luminance at new level count
       this.grayLevels = levels;
       this.applyDither();
+    } else if (this.sourceRgba && !this.colorMode) {
+      // Recompute rawLuma from source before dithering
+      this.grayLevels = levels;
+      this.reprocessFromSource();
+      return; // reprocessFromSource already renders
     } else {
       // Re-quantize existing pixels
       const maxOld = this.grayLevels - 1;
@@ -76,7 +86,9 @@ export class PixelCanvas {
 
   setDitherAlgorithm(alg: DitherAlgorithm): void {
     this.ditherAlgorithm = alg;
-    if (this.rawLuma && !this.colorMode) {
+    if (this.sourceRgba && !this.colorMode && !this.rawLuma) {
+      this.reprocessFromSource();
+    } else if (this.rawLuma && !this.colorMode) {
       this.applyDither();
       this.render();
     }
@@ -89,6 +101,8 @@ export class PixelCanvas {
   clear(): void {
     this.pixels.fill(0);
     this.rawLuma = null;
+    this.sourceRgba = null;
+    this.rgbaData = null;
     this.render();
   }
 
@@ -108,6 +122,10 @@ export class PixelCanvas {
 
   setColorMode(enabled: boolean): void {
     this.colorMode = enabled;
+    if (this.sourceRgba) {
+      this.reprocessFromSource();
+      return;
+    }
     if (!enabled) this.rgbaData = null;
     this.render();
   }
@@ -119,6 +137,11 @@ export class PixelCanvas {
   /** Get raw RGBA pixel data for color quantization (only available after loadImage in color mode). */
   getRgbaData(): Uint8Array | null {
     return this.rgbaData;
+  }
+
+  /** Get raw luminance data (available after loadImage in grayscale modes). */
+  getRawLuma(): Float64Array | null {
+    return this.rawLuma;
   }
 
   async loadImage(file: File): Promise<void> {
@@ -137,28 +160,33 @@ export class PixelCanvas {
     ctx.drawImage(img, x, y, w, h);
 
     const imageData = ctx.getImageData(0, 0, size, size);
-    const data = imageData.data;
+    this.sourceRgba = new Uint8Array(imageData.data);
+    this.reprocessFromSource();
+  }
+
+  /** Reprocess the stored source RGBA for the current mode/dither settings. */
+  private reprocessFromSource(): void {
+    if (!this.sourceRgba) return;
+    const size = this.gridSize;
+    const data = this.sourceRgba;
 
     if (this.colorMode) {
-      // Store raw RGBA for palette quantization
       this.rgbaData = new Uint8Array(data);
       this.rawLuma = null;
-      // Still compute grayscale pixels for preview
       this.pixels = new Array(size * size);
       for (let i = 0; i < size * size; i++) {
-        this.pixels[i] = 1; // just mark as "has content"
+        this.pixels[i] = 1;
       }
       this.renderColor();
     } else {
       this.rgbaData = null;
-      // Compute and cache luminance for re-dithering
       this.rawLuma = new Float64Array(size * size);
       for (let i = 0; i < size * size; i++) {
         const r = data[i * 4];
         const g = data[i * 4 + 1];
         const b = data[i * 4 + 2];
         const luma = 0.299 * r + 0.587 * g + 0.114 * b;
-        this.rawLuma[i] = 255 - luma; // inverted
+        this.rawLuma[i] = 255 - luma;
       }
       this.applyDither();
       this.render();

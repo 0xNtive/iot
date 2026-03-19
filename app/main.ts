@@ -10,7 +10,6 @@ import {
   SonicProtocol,
   type SonicMessage,
 } from '../lib/types.js';
-import type { DitherAlgorithm } from '../lib/dither.js';
 
 import { PixelCanvas } from './components/pixel-canvas.js';
 import { QrPanel } from './components/qr-panel.js';
@@ -20,6 +19,7 @@ import { StatusBar } from './components/status-bar.js';
 import { Controls } from './components/controls.js';
 import { ArenaPanel } from './components/arena-panel.js';
 import { GamePanel } from './components/game-panel.js';
+import { ImagePanel } from './components/image-panel.js';
 
 let sonic: SonicPixel | null = null;
 let activeTab = 'draw';
@@ -34,6 +34,7 @@ let statusBar: StatusBar;
 let controls: Controls;
 let arenaPanel: ArenaPanel;
 let gamePanel: GamePanel;
+let imagePanel: ImagePanel;
 
 function updatePayloadSize(size: number): void {
   statusBar.setPayloadSize(size);
@@ -42,6 +43,13 @@ function updatePayloadSize(size: number): void {
 function updateChunkInfo(): void {
   const chunkEl = document.getElementById('chunk-count')!;
   const infoEl = document.getElementById('chunk-info')!;
+
+  if (activeTab === 'image') {
+    chunkEl.textContent = '';
+    infoEl.textContent = '';
+    imagePanel.updateChunkInfo();
+    return;
+  }
 
   if (activeTab !== 'draw') {
     chunkEl.textContent = '';
@@ -55,7 +63,7 @@ function updateChunkInfo(): void {
     const rgba = pixelCanvas.getRgbaData();
     if (!rgba) {
       chunkEl.textContent = '';
-      infoEl.textContent = 'Load an image to use color mode';
+      infoEl.textContent = 'Load an image first for color mode (or use Image tab)';
       statusBar.setPayloadSize(0);
       return;
     }
@@ -105,19 +113,29 @@ function updateChunkInfo(): void {
   }
 }
 
+/** Get the active pixel canvas (draw or image tab). */
+function getActivePixelCanvas(): { canvas: PixelCanvas; mode: typeof colorMode } {
+  if (activeTab === 'image') {
+    return { canvas: imagePanel.getPixelCanvas(), mode: imagePanel.getColorMode() };
+  }
+  return { canvas: pixelCanvas, mode: colorMode };
+}
+
 /** Get the current frames to send (for download or send). */
 function getCurrentFrames(): Uint8Array[] | null {
   switch (activeTab) {
-    case 'draw': {
-      const size = pixelCanvas.getGridSize();
-      if (colorMode === 'color16') {
-        const rgba = pixelCanvas.getRgbaData();
+    case 'draw':
+    case 'image': {
+      const { canvas, mode } = getActivePixelCanvas();
+      const size = canvas.getGridSize();
+      if (mode === 'color16') {
+        const rgba = canvas.getRgbaData();
         if (!rgba) return null;
         const palImg = quantizeColors(rgba, size, size, 16);
         return encodeChunkedPaletteImage(palImg);
       }
-      const pixels = pixelCanvas.getPixels();
-      const bitDepth = pixelCanvas.getBitDepth();
+      const pixels = canvas.getPixels();
+      const bitDepth = canvas.getBitDepth();
       if (bitDepth === 1) {
         return encodeChunkedImage(size, size, pixels.map(v => v > 0));
       }
@@ -154,7 +172,14 @@ function initTabs(): void {
       document.getElementById(`tab-${target}`)!.classList.add('active');
 
       if (target === 'arena') {
-        arenaPanel.update(pixelCanvas);
+        // Use image panel's canvas if it has content, else draw canvas
+        const imgCanvas = imagePanel.getPixelCanvas();
+        const hasImageContent = imgCanvas.getRawLuma() !== null || imgCanvas.getRgbaData() !== null;
+        if (hasImageContent) {
+          arenaPanel.update(imgCanvas, imgCanvas.getDitherAlgorithm());
+        } else {
+          arenaPanel.update(pixelCanvas);
+        }
       }
       updateChunkInfo();
     });
@@ -167,6 +192,7 @@ function initComponents(): void {
   textPanel = new TextPanel(updatePayloadSize);
   receiveDisplay = new ReceiveDisplay();
   statusBar = new StatusBar();
+  imagePanel = new ImagePanel(updatePayloadSize);
 
   const gridSelect = document.getElementById('grid-size') as HTMLSelectElement;
   gridSelect.addEventListener('change', () => {
@@ -200,21 +226,6 @@ function initComponents(): void {
   document.getElementById('clear-canvas')!.addEventListener('click', () => {
     pixelCanvas.clear();
     updateChunkInfo();
-  });
-
-  const ditherSelect = document.getElementById('dither-mode') as HTMLSelectElement;
-  ditherSelect.addEventListener('change', () => {
-    pixelCanvas.setDitherAlgorithm(ditherSelect.value as DitherAlgorithm);
-    updateChunkInfo();
-  });
-
-  const imageUpload = document.getElementById('image-upload') as HTMLInputElement;
-  imageUpload.addEventListener('change', async () => {
-    const file = imageUpload.files?.[0];
-    if (!file) return;
-    await pixelCanvas.loadImage(file);
-    updateChunkInfo();
-    imageUpload.value = '';
   });
 
   controls = new Controls({
@@ -290,19 +301,21 @@ async function handleSend(): Promise<void> {
   if (!sonic) await initSonic();
 
   try {
-    const size = pixelCanvas.getGridSize();
+    const { canvas, mode } = getActivePixelCanvas();
+    const size = canvas.getGridSize();
     const progress = (sent: number, total: number) => statusBar.setSendProgress(sent, total);
 
     switch (activeTab) {
-      case 'draw': {
-        if (colorMode === 'color16') {
-          const rgba = pixelCanvas.getRgbaData();
+      case 'draw':
+      case 'image': {
+        if (mode === 'color16') {
+          const rgba = canvas.getRgbaData();
           if (!rgba) { alert('Load an image first for color mode'); return; }
           const palImg = quantizeColors(rgba, size, size, 16);
           await sonic!.sendPaletteImage(palImg, progress);
         } else {
-          const pixels = pixelCanvas.getPixels();
-          const bitDepth = pixelCanvas.getBitDepth();
+          const pixels = canvas.getPixels();
+          const bitDepth = canvas.getBitDepth();
           if (bitDepth === 1) {
             await sonic!.sendChunkedImage(size, size, pixels.map(v => v > 0), progress);
           } else {
