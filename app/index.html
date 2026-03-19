@@ -17,6 +17,8 @@
       <button class="tab active" data-tab="draw">Draw</button>
       <button class="tab" data-tab="qr">QR Code</button>
       <button class="tab" data-tab="text">Text</button>
+      <button class="tab" data-tab="arena">Arena</button>
+      <button class="tab" data-tab="game">Game</button>
     </nav>
 
     <main class="panels">
@@ -45,6 +47,13 @@
                   <option value="gray4">4 gray</option>
                   <option value="gray16">16 gray</option>
                   <option value="color16">16 color</option>
+                </select>
+              </label>
+              <label>Dither:
+                <select id="dither-mode">
+                  <option value="none">None</option>
+                  <option value="floyd-steinberg">Floyd-Steinberg</option>
+                  <option value="atkinson">Atkinson</option>
                 </select>
               </label>
               <button id="clear-canvas" class="btn-small">Clear</button>
@@ -77,6 +86,31 @@
           <div class="tab-content" id="tab-text">
             <textarea id="text-input" placeholder="Type a message..." rows="5" maxlength="138"></textarea>
             <div class="byte-counter"><span id="byte-count">0</span>/138 bytes</div>
+          </div>
+
+          <!-- Arena tab -->
+          <div class="tab-content" id="tab-arena">
+            <div id="arena-container"></div>
+          </div>
+
+          <!-- Game tab -->
+          <div class="tab-content" id="tab-game">
+            <div class="game-layout">
+              <div class="game-grid-section">
+                <div class="game-grid-label">YOUR FLEET</div>
+                <canvas id="game-my-grid" width="256" height="256"></canvas>
+              </div>
+              <div class="game-grid-section">
+                <div class="game-grid-label">TARGET</div>
+                <canvas id="game-target-grid" width="256" height="256"></canvas>
+              </div>
+            </div>
+            <div id="game-status" class="game-status">Place your ships</div>
+            <div class="game-controls">
+              <button id="game-rotate" class="btn-small">Rotate</button>
+              <button id="game-ready" class="btn-small">Ready</button>
+              <button id="game-new" class="btn-small">New Game</button>
+            </div>
           </div>
         </section>
 
@@ -113,10 +147,17 @@
       <div class="controls-row">
         <button id="btn-listen" class="btn">Start Listening</button>
         <button id="btn-send" class="btn btn-primary">SEND</button>
+        <button id="btn-pause" class="btn btn-pause" hidden>PAUSE</button>
+        <button id="btn-stop" class="btn btn-stop" hidden>STOP</button>
+        <button id="btn-download" class="btn">WAV</button>
+      </div>
+      <div class="transfer-bar" id="transfer-bar" hidden>
+        <div class="transfer-fill" id="transfer-fill"></div>
+        <span class="transfer-text" id="transfer-text"></span>
       </div>
       <div class="status-bar" id="status-bar">
         <span id="status-state">Status: Idle</span>
-        <span id="status-audio">Audio: <span id="audio-meter">----</span></span>
+        <canvas id="audio-visualizer" width="200" height="28"></canvas>
         <span id="status-payload"><span id="payload-size">0</span> B <span id="chunk-count"></span></span>
       </div>
     </footer>

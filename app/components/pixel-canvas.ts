@@ -1,3 +1,5 @@
+import { ditherImage, type DitherAlgorithm } from '../../lib/dither.js';
+
 const CANVAS_PX = 320;
 
 export class PixelCanvas {
@@ -8,6 +10,8 @@ export class PixelCanvas {
   private grayLevels: number = 2; // 2=B&W, 4=2bit, 16=4bit
   private colorMode = false;
   private rgbaData: Uint8Array | null = null; // raw RGBA for color quantization
+  private rawLuma: Float64Array | null = null; // cached luminance for re-dithering
+  private ditherAlgorithm: DitherAlgorithm = 'none';
   private drawing = false;
   private drawValue = 0;
 
@@ -38,19 +42,25 @@ export class PixelCanvas {
   setGridSize(size: number): void {
     this.gridSize = size;
     this.pixels = new Array(size * size).fill(0);
+    this.rawLuma = null;
     this.render();
   }
 
   setGrayLevels(levels: number): void {
-    this.grayLevels = levels;
-    // Re-quantize existing pixels
-    const maxOld = this.grayLevels;
-    const maxNew = levels - 1;
-    this.pixels = this.pixels.map(v => {
-      if (maxOld <= 2) return v > 0 ? maxNew : 0;
-      return Math.round((v / (maxOld - 1)) * maxNew);
-    });
-    this.grayLevels = levels;
+    if (this.rawLuma) {
+      // Re-dither from cached luminance at new level count
+      this.grayLevels = levels;
+      this.applyDither();
+    } else {
+      // Re-quantize existing pixels
+      const maxOld = this.grayLevels - 1;
+      const maxNew = levels - 1;
+      this.pixels = this.pixels.map(v => {
+        if (maxOld <= 1) return v > 0 ? maxNew : 0;
+        return Math.round((v / maxOld) * maxNew);
+      });
+      this.grayLevels = levels;
+    }
     this.render();
   }
 
@@ -64,8 +74,21 @@ export class PixelCanvas {
     return 4;
   }
 
+  setDitherAlgorithm(alg: DitherAlgorithm): void {
+    this.ditherAlgorithm = alg;
+    if (this.rawLuma && !this.colorMode) {
+      this.applyDither();
+      this.render();
+    }
+  }
+
+  getDitherAlgorithm(): DitherAlgorithm {
+    return this.ditherAlgorithm;
+  }
+
   clear(): void {
     this.pixels.fill(0);
+    this.rawLuma = null;
     this.render();
   }
 
@@ -119,6 +142,7 @@ export class PixelCanvas {
     if (this.colorMode) {
       // Store raw RGBA for palette quantization
       this.rgbaData = new Uint8Array(data);
+      this.rawLuma = null;
       // Still compute grayscale pixels for preview
       this.pixels = new Array(size * size);
       for (let i = 0; i < size * size; i++) {
@@ -127,19 +151,29 @@ export class PixelCanvas {
       this.renderColor();
     } else {
       this.rgbaData = null;
-      const maxVal = this.grayLevels - 1;
-      const step = 256 / this.grayLevels;
-      this.pixels = new Array(size * size);
+      // Compute and cache luminance for re-dithering
+      this.rawLuma = new Float64Array(size * size);
       for (let i = 0; i < size * size; i++) {
         const r = data[i * 4];
         const g = data[i * 4 + 1];
         const b = data[i * 4 + 2];
         const luma = 0.299 * r + 0.587 * g + 0.114 * b;
-        const inverted = 255 - luma;
-        this.pixels[i] = Math.min(Math.floor(inverted / step), maxVal);
+        this.rawLuma[i] = 255 - luma; // inverted
       }
+      this.applyDither();
       this.render();
     }
+  }
+
+  private applyDither(): void {
+    if (!this.rawLuma) return;
+    this.pixels = ditherImage(
+      this.rawLuma,
+      this.gridSize,
+      this.gridSize,
+      this.grayLevels,
+      this.ditherAlgorithm,
+    );
   }
 
   private getCellFromEvent(e: MouseEvent | Touch): { col: number; row: number } | null {

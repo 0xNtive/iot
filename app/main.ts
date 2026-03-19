@@ -3,12 +3,14 @@ import { encodeChunkedImage, encodeChunkedGrayImage, encodeChunkedPaletteImage }
 import { rleEncode, rleEncodeGray } from '../lib/rle.js';
 import { packBits, packValues } from '../lib/bitpack.js';
 import { quantizeColors, encodePaletteImage } from '../lib/palette.js';
+import { encodeFrame } from '../lib/protocol.js';
 import {
   FrameType,
   SonicState,
   SonicProtocol,
   type SonicMessage,
 } from '../lib/types.js';
+import type { DitherAlgorithm } from '../lib/dither.js';
 
 import { PixelCanvas } from './components/pixel-canvas.js';
 import { QrPanel } from './components/qr-panel.js';
@@ -16,6 +18,8 @@ import { TextPanel } from './components/text-panel.js';
 import { ReceiveDisplay } from './components/receive-display.js';
 import { StatusBar } from './components/status-bar.js';
 import { Controls } from './components/controls.js';
+import { ArenaPanel } from './components/arena-panel.js';
+import { GamePanel } from './components/game-panel.js';
 
 let sonic: SonicPixel | null = null;
 let activeTab = 'draw';
@@ -28,6 +32,8 @@ let textPanel: TextPanel;
 let receiveDisplay: ReceiveDisplay;
 let statusBar: StatusBar;
 let controls: Controls;
+let arenaPanel: ArenaPanel;
+let gamePanel: GamePanel;
 
 function updatePayloadSize(size: number): void {
   statusBar.setPayloadSize(size);
@@ -59,11 +65,8 @@ function updateChunkInfo(): void {
     statusBar.setPayloadSize(data.length);
     chunkEl.textContent = `(${chunks.length} chunks)`;
     infoEl.textContent = `Palette ${palImg.palette.length}-color ${data.length}B row-run`;
-    // Show quantized preview in receive panel so user can see the palette rendering
     receiveDisplay.showPalettePreview(
-      size, size,
-      Array.from(palImg.indices),
-      palImg.palette,
+      size, size, Array.from(palImg.indices), palImg.palette,
     );
     return;
   }
@@ -102,6 +105,39 @@ function updateChunkInfo(): void {
   }
 }
 
+/** Get the current frames to send (for download or send). */
+function getCurrentFrames(): Uint8Array[] | null {
+  switch (activeTab) {
+    case 'draw': {
+      const size = pixelCanvas.getGridSize();
+      if (colorMode === 'color16') {
+        const rgba = pixelCanvas.getRgbaData();
+        if (!rgba) return null;
+        const palImg = quantizeColors(rgba, size, size, 16);
+        return encodeChunkedPaletteImage(palImg);
+      }
+      const pixels = pixelCanvas.getPixels();
+      const bitDepth = pixelCanvas.getBitDepth();
+      if (bitDepth === 1) {
+        return encodeChunkedImage(size, size, pixels.map(v => v > 0));
+      }
+      return encodeChunkedGrayImage(size, size, pixels, bitDepth);
+    }
+    case 'qr': {
+      const msg = qrPanel.getMessage();
+      if (!msg) return null;
+      return [encodeFrame(msg)];
+    }
+    case 'text': {
+      const text = textPanel.getText();
+      if (!text) return null;
+      return [encodeFrame({ type: FrameType.TXT, text })];
+    }
+    default:
+      return null;
+  }
+}
+
 function initTabs(): void {
   const tabs = document.querySelectorAll('.tab');
   const contents = document.querySelectorAll('.tab-content');
@@ -117,6 +153,9 @@ function initTabs(): void {
       contents.forEach((c) => c.classList.remove('active'));
       document.getElementById(`tab-${target}`)!.classList.add('active');
 
+      if (target === 'arena') {
+        arenaPanel.update(pixelCanvas);
+      }
       updateChunkInfo();
     });
   });
@@ -163,6 +202,12 @@ function initComponents(): void {
     updateChunkInfo();
   });
 
+  const ditherSelect = document.getElementById('dither-mode') as HTMLSelectElement;
+  ditherSelect.addEventListener('change', () => {
+    pixelCanvas.setDitherAlgorithm(ditherSelect.value as DitherAlgorithm);
+    updateChunkInfo();
+  });
+
   const imageUpload = document.getElementById('image-upload') as HTMLInputElement;
   imageUpload.addEventListener('change', async () => {
     const file = imageUpload.files?.[0];
@@ -177,6 +222,16 @@ function initComponents(): void {
     onVolumeChange: (volume) => sonic?.setVolume(volume),
     onListen: toggleListening,
     onSend: handleSend,
+    onPause: handlePause,
+    onStop: handleStop,
+    onDownload: handleDownload,
+  });
+
+  arenaPanel = new ArenaPanel('arena-container');
+  gamePanel = new GamePanel();
+  gamePanel.setSendCallback(async (frame) => {
+    if (!sonic) await initSonic();
+    sonic!.sendRaw(frame);
   });
 
   updateChunkInfo();
@@ -200,6 +255,9 @@ async function initSonic(): Promise<void> {
     },
     onChunkProgress: (pixels, width, height, bitDepth, progress, palette) => {
       receiveDisplay.showProgress(pixels, width, height, bitDepth, progress, palette);
+    },
+    onGameMessage: (msg) => {
+      gamePanel.handleMessage(msg);
     },
     protocol: SonicProtocol.AudibleFast,
     volume: 50,
@@ -232,11 +290,11 @@ async function handleSend(): Promise<void> {
   if (!sonic) await initSonic();
 
   try {
+    const size = pixelCanvas.getGridSize();
+    const progress = (sent: number, total: number) => statusBar.setSendProgress(sent, total);
+
     switch (activeTab) {
       case 'draw': {
-        const size = pixelCanvas.getGridSize();
-        const progress = (sent: number, total: number) => statusBar.setSendProgress(sent, total);
-
         if (colorMode === 'color16') {
           const rgba = pixelCanvas.getRgbaData();
           if (!rgba) { alert('Load an image first for color mode'); return; }
@@ -269,6 +327,45 @@ async function handleSend(): Promise<void> {
   } catch (err) {
     console.error('Send error:', err);
     alert(`Send failed: ${err instanceof Error ? err.message : err}`);
+  }
+}
+
+function handlePause(): void {
+  if (!sonic) return;
+  if (sonic.isPaused()) {
+    sonic.resumeSend();
+    controls.setPaused(false);
+  } else {
+    sonic.pauseSend();
+    controls.setPaused(true);
+  }
+}
+
+function handleStop(): void {
+  if (!sonic) return;
+  sonic.abortSend();
+}
+
+async function handleDownload(): Promise<void> {
+  if (!sonic) await initSonic();
+
+  const frames = getCurrentFrames();
+  if (!frames || frames.length === 0) {
+    alert('Nothing to download — create or load content first');
+    return;
+  }
+
+  try {
+    const blob = sonic!.generateWav(frames);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `wavepx-${Date.now()}.wav`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    console.error('Download error:', err);
+    alert(`Download failed: ${err instanceof Error ? err.message : err}`);
   }
 }
 

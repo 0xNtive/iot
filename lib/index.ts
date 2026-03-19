@@ -1,10 +1,24 @@
 export { SonicPixel } from './wavepx.js';
+export { waveformsToWav } from './audio.js';
 export { encodeFrame, decodeFrame } from './protocol.js';
 export { packBits, unpackBits, packValues, unpackValues } from './bitpack.js';
 export { rleEncode, rleDecode, rleEncodeGray, rleDecodeGray, quantize, dequantize } from './rle.js';
 export { encodeChunkedImage, encodeChunkedGrayImage, encodeChunkedPaletteImage, decodeChunkFrame, ChunkAssembler } from './chunked.js';
 export { quantizeColors, encodePaletteImage, decodePaletteImage, type RGB, type PaletteImage } from './palette.js';
 export { createQrMessage } from './qr.js';
+export { ditherImage, type DitherAlgorithm } from './dither.js';
+export {
+  encodeGameFrame, decodeGameFrame, GAME_FRAME_TYPE,
+  GameSubtype, ShotResult,
+  type GameMessage, type SetupMessage, type ShotMessage, type ResultMessage, type WinMessage,
+} from './game-protocol.js';
+export {
+  createGameState, canPlaceShip, placeShip, toggleOrientation,
+  allShipsPlaced, computePlacementHash, confirmReady,
+  receiveSetup, receiveShot, recordResult, checkWin, declareWin, switchTurn,
+  GRID_SIZE, SHIP_SIZES,
+  type GameState, type Ship, type CellState, type GamePhase,
+} from './game-state.js';
 export {
   FrameType,
   ECLevel,

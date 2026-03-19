@@ -1,5 +1,5 @@
 import { GGWaveTransport } from './transport.js';
-import { AudioManager } from './audio.js';
+import { AudioManager, waveformsToWav } from './audio.js';
 import { encodeFrame, decodeFrame } from './protocol.js';
 import { createQrMessage } from './qr.js';
 import {
@@ -7,6 +7,7 @@ import {
   decodeChunkFrame, ChunkAssembler, CHUNK_TYPE, BitDepth,
 } from './chunked.js';
 import { type PaletteImage } from './palette.js';
+import { GAME_FRAME_TYPE, decodeGameFrame } from './game-protocol.js';
 import {
   FrameType,
   SonicState,
@@ -18,7 +19,6 @@ import {
 import { SEND_SILENCE_BUFFER_MS, CHUNK_SILENCE_BUFFER_MS, MAX_PAYLOAD, IMG_HEADER_SIZE } from './constants.js';
 import { packBits } from './bitpack.js';
 
-// Map protocol families to their "fastest" variant
 const FASTEST_VARIANT: Record<number, SonicProtocol> = {
   0: SonicProtocol.AudibleFastest,
   1: SonicProtocol.AudibleFastest,
@@ -41,6 +41,8 @@ export class SonicPixel {
   private volume: number;
   private assembler: ChunkAssembler;
   private sendAborted = false;
+  private sendPaused = false;
+  private pauseResolve: (() => void) | null = null;
 
   constructor(config: SonicPixelConfig = {}) {
     this.config = config;
@@ -84,9 +86,12 @@ export class SonicPixel {
                 palette: result.palette,
               });
             }
+          } else if (payload[0] === GAME_FRAME_TYPE) {
+            const gameMsg = decodeGameFrame(payload);
+            this.config.onGameMessage?.(gameMsg);
           } else {
             const msg = decodeFrame(payload);
-            if (msg !== 'chunk') {
+            if (msg !== 'chunk' && msg !== 'game') {
               this.config.onReceive?.(msg);
             }
           }
@@ -120,46 +125,27 @@ export class SonicPixel {
     }
   }
 
-  /**
-   * Send a B&W image as chunks.
-   */
   async sendChunkedImage(
-    width: number,
-    height: number,
-    pixels: boolean[],
+    width: number, height: number, pixels: boolean[],
     onProgress?: (sent: number, total: number) => void,
   ): Promise<void> {
-    // Single-frame shortcut
     const packed = packBits(pixels);
     if (IMG_HEADER_SIZE + packed.length <= MAX_PAYLOAD && width <= 255 && height <= 255) {
       await this.send({ type: FrameType.IMG, width, height, pixels });
       return;
     }
-
     const chunks = encodeChunkedImage(width, height, pixels);
     await this.sendChunks(chunks, onProgress);
   }
 
-  /**
-   * Send a grayscale image as chunks.
-   * pixels: quantized values (0 to levels-1).
-   * bitDepth: 1, 2, or 4.
-   */
   async sendGrayImage(
-    width: number,
-    height: number,
-    pixels: number[],
-    bitDepth: 1 | 2 | 4,
+    width: number, height: number, pixels: number[], bitDepth: 1 | 2 | 4,
     onProgress?: (sent: number, total: number) => void,
   ): Promise<void> {
     const chunks = encodeChunkedGrayImage(width, height, pixels, bitDepth);
     await this.sendChunks(chunks, onProgress);
   }
 
-  /**
-   * Send a palette-indexed color image as chunks.
-   * Colors are announced once, then each color's pixel positions sent as row-runs.
-   */
   async sendPaletteImage(
     img: PaletteImage,
     onProgress?: (sent: number, total: number) => void,
@@ -177,25 +163,34 @@ export class SonicPixel {
 
     this.setState(SonicState.Sending);
     this.sendAborted = false;
+    this.sendPaused = false;
 
-    // Use fastest variant of current protocol family for multi-chunk transfers
     const turboProto = FASTEST_VARIANT[this.protocol] ?? this.protocol;
 
     try {
       for (let i = 0; i < chunks.length; i++) {
         if (this.sendAborted) break;
 
+        // Wait if paused
+        while (this.sendPaused && !this.sendAborted) {
+          await new Promise<void>((resolve) => {
+            this.pauseResolve = resolve;
+          });
+        }
+        if (this.sendAborted) break;
+
         const samples = this.transport.encode(chunks[i], turboProto, this.volume);
         await this.audio.play(samples);
         onProgress?.(i + 1, chunks.length);
 
-        // Shorter gap between chunks — we're not listening during send
         if (i < chunks.length - 1) {
           await new Promise((r) => setTimeout(r, CHUNK_SILENCE_BUFFER_MS));
         }
       }
     } finally {
       this.sendAborted = false;
+      this.sendPaused = false;
+      this.pauseResolve = null;
       this.setState(SonicState.Idle);
       if (wasListening) await this.startListening();
     }
@@ -203,6 +198,53 @@ export class SonicPixel {
 
   abortSend(): void {
     this.sendAborted = true;
+    // Also unpause if paused, so the loop exits
+    if (this.pauseResolve) {
+      this.pauseResolve();
+      this.pauseResolve = null;
+    }
+  }
+
+  pauseSend(): void {
+    this.sendPaused = true;
+  }
+
+  resumeSend(): void {
+    this.sendPaused = false;
+    if (this.pauseResolve) {
+      this.pauseResolve();
+      this.pauseResolve = null;
+    }
+  }
+
+  isPaused(): boolean {
+    return this.sendPaused;
+  }
+
+  /**
+   * Generate WAV file for the given frames without playing them.
+   * Used for download functionality.
+   */
+  generateWav(frames: Uint8Array[]): Blob {
+    const turboProto = FASTEST_VARIANT[this.protocol] ?? this.protocol;
+    const waveforms = frames.map(f => this.transport.encode(f, turboProto, this.volume));
+    return waveformsToWav(waveforms, CHUNK_SILENCE_BUFFER_MS);
+  }
+
+  /** Send a raw pre-encoded frame (used by game protocol). */
+  async sendRaw(frame: Uint8Array): Promise<void> {
+    const wasListening = this.listening;
+    if (wasListening) this.stopListening();
+
+    this.setState(SonicState.Sending);
+    try {
+      const samples = this.transport.encode(frame, this.protocol, this.volume);
+      await this.audio.play(samples);
+      await new Promise((r) => setTimeout(r, SEND_SILENCE_BUFFER_MS));
+    } finally {
+      this.setState(SonicState.Idle);
+      if (wasListening) await this.startListening();
+    }
   }
 
   async sendQr(text: string, opts?: QrSendOptions): Promise<void> {
