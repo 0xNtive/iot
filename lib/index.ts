@@ -48,3 +48,15 @@ export {
   type DataMessage, type DoneMessage, type AbortMessage,
 } from './transfer-protocol.js';
 export { TransferSenderSession, TransferReceiverSession } from './transfer-session.js';
+
+// NEW FEATURES
+export { computeCrc8, verifyCrc8 } from './checksum.js';
+export { TransmissionStats, type TransmissionMetrics } from './stats.js';
+export { xorEncrypt, xorDecrypt } from './crypto.js';
+export { analyzeCompression, type CompressionAnalysis } from './rle.js';
+export { splitTextBatch, type TextChunk } from './text-utils.js';
+export { estimateSignalQuality, type SignalQuality } from './signal.js';
+export { encodeDiff, applyDiff, encodeDiffGray, applyDiffGray, type DiffResult } from './diff.js';
+export { TransmissionLog, type TransmissionEvent } from './history.js';
+export { WavepxError, FrameError, EncodingError, TransportError } from './errors.js';
+export { VERSION, getLibraryInfo, type LibraryInfo } from './version.js';

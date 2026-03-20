@@ -5,6 +5,7 @@ export enum FrameType {
   CHUNK = 0x04,
   GAME = 0x05,
   TRANSFER = 0x06,
+  HELLO = 0x07,
 }
 
 export enum ECLevel {
@@ -54,6 +55,13 @@ export interface TxtMessage {
   text: string;
 }
 
+export interface HelloMessage {
+  type: FrameType.HELLO;
+  protocolVersion: number;
+  supportedFeatures: number[];
+  capabilities: string[];
+}
+
 export interface ChunkedImgMessage {
   type: FrameType.CHUNK;
   width: number;
@@ -63,7 +71,7 @@ export interface ChunkedImgMessage {
   palette?: { r: number; g: number; b: number }[];
 }
 
-export type SonicMessage = QrMessage | ImgMessage | TxtMessage | ChunkedImgMessage;
+export type SonicMessage = QrMessage | ImgMessage | TxtMessage | ChunkedImgMessage | HelloMessage;
 
 export interface SonicPixelConfig {
   onReceive?: (msg: SonicMessage) => void;

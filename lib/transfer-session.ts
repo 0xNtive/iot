@@ -46,6 +46,9 @@ export class TransferSenderSession {
   private synFrame: Uint8Array | null = null;
   private dataFrames: Uint8Array[] = [];
   private errorMessage = '';
+  private synRetryCount = 0;
+  private maxSynRetries = 3;
+  private baseRetryDelayMs = 1000;
 
   constructor(data: ArrayBuffer, fileName: string, options?: TransferOptions) {
     this.sessionId = Math.floor(Math.random() * 256);
@@ -151,6 +154,7 @@ export class TransferSenderSession {
 
   onSynAck(msg: SynAckMessage): boolean {
     if (msg.sessionId !== this.sessionId) return false;
+    this.resetRetries(); // Reset retry count on successful SYN_ACK
     this.state = 'sending';
     return true;
   }
@@ -177,6 +181,40 @@ export class TransferSenderSession {
   markError(msg: string): void {
     this.state = 'error';
     this.errorMessage = msg;
+  }
+
+  /**
+   * Handle SYN timeout with exponential backoff retry
+   * @returns Next retry delay in milliseconds, or -1 if max retries exceeded
+   */
+  onSynTimeout(): number {
+    this.synRetryCount++;
+    
+    if (this.synRetryCount >= this.maxSynRetries) {
+      this.markError(`SYN timeout after ${this.maxSynRetries} retries`);
+      return -1;
+    }
+
+    // Exponential backoff: double delay each attempt
+    const delayMs = this.baseRetryDelayMs * Math.pow(2, this.synRetryCount - 1);
+    return delayMs;
+  }
+
+  /**
+   * Reset retry count when SYN_ACK is received
+   */
+  resetRetries(): void {
+    this.synRetryCount = 0;
+  }
+
+  /**
+   * Get current retry statistics
+   */
+  getRetryStats(): { synRetryCount: number; maxSynRetries: number } {
+    return {
+      synRetryCount: this.synRetryCount,
+      maxSynRetries: this.maxSynRetries,
+    };
   }
 }
 
