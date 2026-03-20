@@ -4,6 +4,7 @@ export enum FrameType {
   TXT = 0x03,
   CHUNK = 0x04,
   GAME = 0x05,
+  TRANSFER = 0x06,
 }
 
 export enum ECLevel {
@@ -71,6 +72,7 @@ export interface SonicPixelConfig {
   onAudioLevel?: (level: number) => void;
   onChunkProgress?: (pixels: number[], width: number, height: number, bitDepth: number, progress: number, palette?: { r: number; g: number; b: number }[]) => void;
   onGameMessage?: (msg: import('./game-protocol.js').GameMessage) => void;
+  onTransferMessage?: (msg: import('./transfer-protocol.js').TransferMessage) => void;
   protocol?: SonicProtocol;
   volume?: number;
 }

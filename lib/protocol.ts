@@ -19,6 +19,7 @@ import {
 } from './constants.js';
 import { CHUNK_TYPE } from './chunked.js';
 import { GAME_FRAME_TYPE } from './game-protocol.js';
+import { TRANSFER_FRAME_TYPE } from './transfer-protocol.js';
 
 export function encodeFrame(msg: SonicMessage): Uint8Array {
   switch (msg.type) {
@@ -35,7 +36,7 @@ export function encodeFrame(msg: SonicMessage): Uint8Array {
   }
 }
 
-export function decodeFrame(data: Uint8Array): SonicMessage | 'chunk' | 'game' {
+export function decodeFrame(data: Uint8Array): SonicMessage | 'chunk' | 'game' | 'transfer' {
   if (data.length < 2) {
     throw new Error('Frame too short');
   }
@@ -52,6 +53,8 @@ export function decodeFrame(data: Uint8Array): SonicMessage | 'chunk' | 'game' {
       return 'chunk';
     case GAME_FRAME_TYPE:
       return 'game';
+    case TRANSFER_FRAME_TYPE:
+      return 'transfer';
     default:
       throw new Error(`Unknown frame type: 0x${type.toString(16)}`);
   }

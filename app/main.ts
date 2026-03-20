@@ -20,6 +20,7 @@ import { Controls } from './components/controls.js';
 import { ArenaPanel } from './components/arena-panel.js';
 import { GamePanel } from './components/game-panel.js';
 import { ImagePanel } from './components/image-panel.js';
+import { TransferPanel } from './components/transfer-panel.js';
 
 let sonic: SonicPixel | null = null;
 let activeTab = 'draw';
@@ -35,6 +36,7 @@ let controls: Controls;
 let arenaPanel: ArenaPanel;
 let gamePanel: GamePanel;
 let imagePanel: ImagePanel;
+let transferPanel: TransferPanel;
 
 function updatePayloadSize(size: number): void {
   statusBar.setPayloadSize(size);
@@ -208,6 +210,17 @@ function initComponents(): void {
 
   arenaPanel = new ArenaPanel('arena-container');
   gamePanel = new GamePanel();
+  transferPanel = new TransferPanel();
+  transferPanel.setSendCallback(async (data, name) => {
+    if (!sonic) await initSonic();
+    await sonic!.sendFileTransfer(data, name, (sent, total, state) => {
+      transferPanel.setSendProgress(sent, total, state);
+    });
+  });
+  transferPanel.setSendRawCallback(async (frame) => {
+    if (!sonic) await initSonic();
+    sonic!.sendRaw(frame);
+  });
   gamePanel.setSendCallback(async (frame) => {
     if (!sonic) await initSonic();
     sonic!.sendRaw(frame);
@@ -237,6 +250,9 @@ async function initSonic(): Promise<void> {
     },
     onGameMessage: (msg) => {
       gamePanel.handleMessage(msg);
+    },
+    onTransferMessage: (msg) => {
+      transferPanel.handleTransferMessage(msg);
     },
     protocol: SonicProtocol.AudibleFast,
     volume: 50,

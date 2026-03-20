@@ -8,6 +8,8 @@ import {
 } from './chunked.js';
 import { type PaletteImage } from './palette.js';
 import { GAME_FRAME_TYPE, decodeGameFrame } from './game-protocol.js';
+import { TRANSFER_FRAME_TYPE, decodeTransferFrame } from './transfer-protocol.js';
+import { TransferSenderSession } from './transfer-session.js';
 import {
   FrameType,
   SonicState,
@@ -16,7 +18,10 @@ import {
   type SonicPixelConfig,
   type QrSendOptions,
 } from './types.js';
-import { SEND_SILENCE_BUFFER_MS, CHUNK_SILENCE_BUFFER_MS, MAX_PAYLOAD, IMG_HEADER_SIZE } from './constants.js';
+import {
+  SEND_SILENCE_BUFFER_MS, CHUNK_SILENCE_BUFFER_MS, MAX_PAYLOAD, IMG_HEADER_SIZE,
+  TRANSFER_SYN_TIMEOUT_MS, TRANSFER_SYN_RETRIES, TRANSFER_DONE_TIMEOUT_MS,
+} from './constants.js';
 import { packBits } from './bitpack.js';
 
 const FASTEST_VARIANT: Record<number, SonicProtocol> = {
@@ -89,9 +94,12 @@ export class SonicPixel {
           } else if (payload[0] === GAME_FRAME_TYPE) {
             const gameMsg = decodeGameFrame(payload);
             this.config.onGameMessage?.(gameMsg);
+          } else if (payload[0] === TRANSFER_FRAME_TYPE) {
+            const transferMsg = decodeTransferFrame(payload);
+            this.config.onTransferMessage?.(transferMsg);
           } else {
             const msg = decodeFrame(payload);
-            if (msg !== 'chunk' && msg !== 'game') {
+            if (msg !== 'chunk' && msg !== 'game' && msg !== 'transfer') {
               this.config.onReceive?.(msg);
             }
           }
@@ -242,6 +250,142 @@ export class SonicPixel {
       await this.audio.play(samples);
       await new Promise((r) => setTimeout(r, SEND_SILENCE_BUFFER_MS));
     } finally {
+      this.setState(SonicState.Idle);
+      if (wasListening) await this.startListening();
+    }
+  }
+
+  /**
+   * Send a file using the reliable transfer protocol with fountain codes.
+   * Handles the full SYN → SYN_ACK → DATA burst → DONE dance.
+   */
+  async sendFileTransfer(
+    data: ArrayBuffer,
+    fileName: string,
+    onProgress?: (sent: number, total: number, state: string) => void,
+  ): Promise<void> {
+    const session = new TransferSenderSession(data, fileName);
+    await session.prepare();
+
+    if (session.getState() === 'error') {
+      throw new Error(session.getError());
+    }
+
+    const wasListening = this.listening;
+    if (wasListening) this.stopListening();
+
+    this.setState(SonicState.Sending);
+    this.sendAborted = false;
+
+    try {
+      // Send SYN and wait for SYN_ACK
+      let synAckReceived = false;
+      const onTransfer = this.config.onTransferMessage;
+
+      const synAckHandler = (msg: import('./transfer-protocol.js').TransferMessage) => {
+        if (msg.subtype === 0x02 /* SYN_ACK */ && session.onSynAck(msg as any)) {
+          synAckReceived = true;
+        }
+        if (msg.subtype === 0x04 /* DONE */ && session.onDone(msg as any)) {
+          // Early done
+        }
+      };
+      this.config.onTransferMessage = synAckHandler;
+
+      for (let attempt = 0; attempt < TRANSFER_SYN_RETRIES; attempt++) {
+        if (this.sendAborted) break;
+
+        // Send SYN
+        const synSamples = this.transport.encode(session.getSynFrame(), this.protocol, this.volume);
+        await this.audio.play(synSamples);
+        onProgress?.(0, session.getTotalFrames(), 'Waiting for receiver...');
+
+        // Listen for SYN_ACK
+        await this.audio.startCapture(
+          (samples) => {
+            const payload = this.transport.decode(samples);
+            if (payload && payload[0] === TRANSFER_FRAME_TYPE) {
+              synAckHandler(decodeTransferFrame(payload));
+            }
+          },
+        );
+
+        // Wait for SYN_ACK with timeout
+        const deadline = Date.now() + TRANSFER_SYN_TIMEOUT_MS;
+        while (!synAckReceived && !this.sendAborted && Date.now() < deadline) {
+          await new Promise(r => setTimeout(r, 100));
+        }
+        this.audio.stopCapture();
+
+        if (synAckReceived || this.sendAborted) break;
+      }
+
+      if (this.sendAborted) return;
+      if (!synAckReceived) {
+        throw new Error('No receiver responded (SYN_ACK timeout)');
+      }
+
+      // Send DATA burst
+      session.markSending();
+      const turboProto = FASTEST_VARIANT[this.protocol] ?? this.protocol;
+      const dataFrames = session.getDataFrames();
+
+      for (let i = 0; i < dataFrames.length; i++) {
+        if (this.sendAborted) break;
+
+        while (this.sendPaused && !this.sendAborted) {
+          await new Promise<void>(resolve => { this.pauseResolve = resolve; });
+        }
+        if (this.sendAborted) break;
+
+        const samples = this.transport.encode(dataFrames[i], turboProto, this.volume);
+        await this.audio.play(samples);
+        onProgress?.(i + 1, dataFrames.length, 'Sending...');
+
+        if (i < dataFrames.length - 1) {
+          await new Promise(r => setTimeout(r, CHUNK_SILENCE_BUFFER_MS));
+        }
+      }
+
+      if (this.sendAborted) return;
+
+      // Wait for DONE
+      session.markAwaitingDone();
+      let doneReceived = false;
+
+      const doneHandler = (msg: import('./transfer-protocol.js').TransferMessage) => {
+        if (msg.subtype === 0x04 /* DONE */ && session.onDone(msg as any)) {
+          doneReceived = true;
+        }
+      };
+      this.config.onTransferMessage = doneHandler;
+
+      await this.audio.startCapture(
+        (samples) => {
+          const payload = this.transport.decode(samples);
+          if (payload && payload[0] === TRANSFER_FRAME_TYPE) {
+            doneHandler(decodeTransferFrame(payload));
+          }
+        },
+      );
+
+      const doneDeadline = Date.now() + TRANSFER_DONE_TIMEOUT_MS;
+      while (!doneReceived && !this.sendAborted && Date.now() < doneDeadline) {
+        await new Promise(r => setTimeout(r, 100));
+      }
+      this.audio.stopCapture();
+
+      if (doneReceived) {
+        onProgress?.(dataFrames.length, dataFrames.length, 'Complete!');
+      } else if (!this.sendAborted) {
+        onProgress?.(dataFrames.length, dataFrames.length, 'Sent (no confirmation)');
+      }
+
+    } finally {
+      this.config.onTransferMessage = onTransfer;
+      this.sendAborted = false;
+      this.sendPaused = false;
+      this.pauseResolve = null;
       this.setState(SonicState.Idle);
       if (wasListening) await this.startListening();
     }

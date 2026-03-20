@@ -39,3 +39,12 @@ export {
   MAX_IMG_DIMENSION,
   MAX_TEXT_BYTES,
 } from './constants.js';
+export { deflateCompress, deflateDecompress, isCompressionAvailable } from './deflate.js';
+export { encodeBlocks, FountainDecoder, type EncodedBlock } from './fountain.js';
+export {
+  TRANSFER_FRAME_TYPE, TransferSubtype,
+  encodeTransferFrame, decodeTransferFrame, computeCrc32,
+  type TransferMessage, type SynMessage, type SynAckMessage,
+  type DataMessage, type DoneMessage, type AbortMessage,
+} from './transfer-protocol.js';
+export { TransferSenderSession, TransferReceiverSession } from './transfer-session.js';

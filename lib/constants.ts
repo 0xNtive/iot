@@ -17,3 +17,10 @@ export const MAX_TEXT_BYTES = MAX_PAYLOAD - 2; // 138 bytes for TXT
 
 export const SEND_SILENCE_BUFFER_MS = 200;
 export const CHUNK_SILENCE_BUFFER_MS = 50; // shorter gap between chunks (not listening during send)
+
+// Transfer protocol constants
+export const TRANSFER_BLOCK_SIZE = 130;
+export const TRANSFER_REDUNDANCY = 0.5;
+export const TRANSFER_SYN_TIMEOUT_MS = 5000;
+export const TRANSFER_SYN_RETRIES = 3;
+export const TRANSFER_DONE_TIMEOUT_MS = 10000;

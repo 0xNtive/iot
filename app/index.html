@@ -18,6 +18,7 @@
       <button class="tab" data-tab="image">Image</button>
       <button class="tab" data-tab="qr">QR Code</button>
       <button class="tab" data-tab="text">Text</button>
+      <button class="tab" data-tab="transfer">Transfer</button>
       <button class="tab" data-tab="arena">Arena</button>
       <button class="tab" data-tab="game">Game</button>
     </nav>
@@ -129,6 +130,42 @@
           <div class="tab-content" id="tab-text">
             <textarea id="text-input" placeholder="Type a message..." rows="5" maxlength="138"></textarea>
             <div class="byte-counter"><span id="byte-count">0</span>/138 bytes</div>
+          </div>
+
+          <!-- Transfer tab -->
+          <div class="tab-content" id="tab-transfer">
+            <div class="transfer-drop-zone" id="transfer-drop-zone">
+              <div class="transfer-drop-text">Drop a file here or click to select</div>
+              <div class="transfer-drop-hint">Max 64KB — compressed with DEFLATE, sent with fountain codes</div>
+              <input type="file" id="transfer-file-input" hidden />
+            </div>
+            <div id="transfer-file-info" class="transfer-file-info" hidden>
+              <span id="transfer-file-name"></span>
+              <span id="transfer-file-size"></span>
+              <button id="transfer-send-btn" class="btn-small" hidden>Send</button>
+            </div>
+            <div id="transfer-progress-section" class="transfer-progress-section" hidden>
+              <div class="transfer-bar-inner">
+                <div class="transfer-fill" id="transfer-send-fill"></div>
+                <span class="transfer-text" id="transfer-send-text"></span>
+              </div>
+            </div>
+            <div id="transfer-status" class="transfer-status"></div>
+            <div id="transfer-receive-section" class="transfer-receive-section" hidden>
+              <div class="transfer-bar-inner">
+                <div class="transfer-fill" id="transfer-recv-fill"></div>
+                <span class="transfer-text" id="transfer-recv-text"></span>
+              </div>
+              <a id="transfer-download-link" class="btn-small" hidden>Download</a>
+            </div>
+            <details class="edu-blurb">
+              <summary>How fountain codes work</summary>
+              <div class="edu-content">
+                <p><strong>Fountain codes</strong> let the receiver reconstruct data from <em>any</em> sufficient subset of encoded blocks — no specific blocks are required. The sender generates more blocks than strictly needed (50% extra by default), so the receiver can tolerate lost blocks without retransmission.</p>
+                <p>Each parity block is the XOR of 2-3 source blocks. When a source block is lost, the receiver recovers it by XORing a parity block with the other known sources. The payload is compressed with <strong>DEFLATE</strong> first (3-5x for text), and a CRC-32 hash verifies integrity after reassembly.</p>
+                <p>The protocol: sender broadcasts a SYN (file metadata), receiver replies SYN_ACK, sender bursts all data blocks, receiver sends DONE when complete. Only 2 turn-arounds needed — the half-duplex audio channel stays efficient.</p>
+              </div>
+            </details>
           </div>
 
           <!-- Arena tab -->
