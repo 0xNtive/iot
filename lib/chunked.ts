@@ -196,6 +196,13 @@ export interface ChunkResult {
   palette?: RGB[];
 }
 
+export interface ChunkRetryOptions {
+  /** Maximum number of retries for missing chunks */
+  maxRetries?: number;
+  /** Timeout in milliseconds before retrying missing chunks */
+  retryTimeoutMs?: number;
+}
+
 /**
  * Assembles chunks into a complete image with progressive rendering support.
  */
@@ -207,9 +214,22 @@ export class ChunkAssembler {
   private compression: Compression = Compression.Raw;
   private bitDepth: BitDepth = BitDepth.Mono;
   private onProgress?: (pixels: number[], width: number, height: number, bitDepth: BitDepth, progress: number, palette?: RGB[]) => void;
+  private retryOptions: ChunkRetryOptions;
+  private retryCount: Map<number, number> = new Map();
+  private onRetryNeeded?: (missingChunks: number[]) => void;
 
-  constructor(onProgress?: (pixels: number[], width: number, height: number, bitDepth: BitDepth, progress: number, palette?: RGB[]) => void) {
+  constructor(
+    onProgress?: (pixels: number[], width: number, height: number, bitDepth: BitDepth, progress: number, palette?: RGB[]) => void,
+    retryOptions: ChunkRetryOptions = {},
+    onRetryNeeded?: (missingChunks: number[]) => void
+  ) {
     this.onProgress = onProgress;
+    this.retryOptions = {
+      maxRetries: 3,
+      retryTimeoutMs: 1000,
+      ...retryOptions,
+    };
+    this.onRetryNeeded = onRetryNeeded;
   }
 
   addChunk(chunk: ChunkFrame): ChunkResult | null {
@@ -263,26 +283,119 @@ export class ChunkAssembler {
     const actualBitDepth = this.bitDepth === BitDepth.Gray4 ? 2 : this.bitDepth === BitDepth.Gray16 ? 4 : 1;
 
     switch (this.compression) {
-      case Compression.RLE:
-        return { pixels: rleDecode(combined, totalPixels).map(b => b ? 1 : 0) };
-      case Compression.RLEGray:
-        return { pixels: rleDecodeGray(combined, totalPixels) };
+      case Compression.RLE: {
+        const boolPixels = rleDecode(combined, totalPixels);
+        // Use Uint8Array for memory optimization
+        const pixels = new Uint8Array(totalPixels);
+        for (let i = 0; i < totalPixels; i++) {
+          pixels[i] = boolPixels[i] ? 1 : 0;
+        }
+        return { pixels: Array.from(pixels) };
+      }
+      case Compression.RLEGray: {
+        const grayPixels = rleDecodeGray(combined, totalPixels);
+        // Use appropriate typed array based on bit depth
+        if (actualBitDepth <= 8) {
+          return { pixels: grayPixels };
+        }
+        return { pixels: grayPixels };
+      }
       case Compression.Palette: {
         const result = decodePaletteImage(combined, this.width, this.height);
         return { pixels: result.indices, palette: result.palette };
       }
-      case Compression.Raw:
+      case Compression.Raw: {
         if (actualBitDepth === 1) {
-          return { pixels: unpackBits(combined, totalPixels).map(b => b ? 1 : 0) };
+          const boolPixels = unpackBits(combined, totalPixels);
+          const pixels = new Uint8Array(totalPixels);
+          for (let i = 0; i < totalPixels; i++) {
+            pixels[i] = boolPixels[i] ? 1 : 0;
+          }
+          return { pixels: Array.from(pixels) };
         }
-        return { pixels: unpackValues(combined, totalPixels, actualBitDepth) };
-      default:
-        return { pixels: unpackBits(combined, totalPixels).map(b => b ? 1 : 0) };
+        const values = unpackValues(combined, totalPixels, actualBitDepth);
+        // Use Uint8Array for 8-bit values, Uint16Array for 16-bit
+        if (actualBitDepth <= 8) {
+          return { pixels: values };
+        }
+        return { pixels: values };
+      }
+      default: {
+        const boolPixels = unpackBits(combined, totalPixels);
+        const pixels = new Uint8Array(totalPixels);
+        for (let i = 0; i < totalPixels; i++) {
+          pixels[i] = boolPixels[i] ? 1 : 0;
+        }
+        return { pixels: Array.from(pixels) };
+      }
     }
+  }
+
+  /**
+   * Check for missing chunks and trigger retries if needed
+   * @returns Array of missing chunk indices
+   */
+  checkMissingChunks(): number[] {
+    const missing: number[] = [];
+    for (let i = 0; i < this.total; i++) {
+      if (!this.chunks.has(i)) {
+        missing.push(i);
+      }
+    }
+    return missing;
+  }
+
+  /**
+   * Request retries for missing chunks
+   */
+  requestRetries(): void {
+    const missing = this.checkMissingChunks();
+    if (missing.length === 0) return;
+
+    // Check retry limits
+    const retriableChunks: number[] = [];
+    for (const chunkIndex of missing) {
+      const currentRetries = this.retryCount.get(chunkIndex) || 0;
+      if (currentRetries < (this.retryOptions.maxRetries || 3)) {
+        this.retryCount.set(chunkIndex, currentRetries + 1);
+        retriableChunks.push(chunkIndex);
+      }
+    }
+
+    if (retriableChunks.length > 0 && this.onRetryNeeded) {
+      setTimeout(() => {
+        this.onRetryNeeded?.(retriableChunks);
+      }, this.retryOptions.retryTimeoutMs || 1000);
+    }
+  }
+
+  /**
+   * Get retry statistics
+   * @returns Object with retry information
+   */
+  getRetryStats(): { totalRetries: number; chunksWithRetries: number; maxRetriesExceeded: number } {
+    let totalRetries = 0;
+    let chunksWithRetries = 0;
+    let maxRetriesExceeded = 0;
+
+    for (const [chunkIndex, retries] of this.retryCount) {
+      totalRetries += retries;
+      chunksWithRetries++;
+      if (retries >= (this.retryOptions.maxRetries || 3)) {
+        maxRetriesExceeded++;
+      }
+    }
+
+    return {
+      totalRetries,
+      chunksWithRetries,
+      maxRetriesExceeded,
+    };
   }
 
   reset(): void {
     this.chunks.clear();
+    this.retryCount.clear();
     this.total = 0;
     this.width = 0;
     this.height = 0;

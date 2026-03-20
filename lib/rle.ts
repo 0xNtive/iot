@@ -129,3 +129,43 @@ export function rleRatio(pixels: boolean[]): number {
   const encoded = rleEncode(pixels);
   return encoded.length / raw;
 }
+
+export interface CompressionAnalysis {
+  rawSize: number;
+  rleSize: number;
+  ratio: number;
+  recommended: boolean;
+}
+
+/**
+ * Analyze compression effectiveness for pixel data
+ * @param pixels Pixel data to analyze
+ * @param bitDepth Bit depth (1 for monochrome, 2/4/8 for grayscale)
+ * @returns Compression analysis with recommendations
+ */
+export function analyzeCompression(pixels: boolean[] | number[], bitDepth: 1 | 2 | 4 | 8): CompressionAnalysis {
+  let rawSize: number;
+  let rleSize: number;
+  
+  if (bitDepth === 1) {
+    // Monochrome pixels
+    const monoPixels = pixels as boolean[];
+    rawSize = Math.ceil(monoPixels.length / 8);
+    rleSize = rleEncode(monoPixels).length;
+  } else {
+    // Grayscale pixels
+    const grayPixels = pixels as number[];
+    rawSize = grayPixels.length * (bitDepth / 8);
+    rleSize = rleEncodeGray(grayPixels).length;
+  }
+  
+  const ratio = rawSize > 0 ? rleSize / rawSize : 0;
+  const recommended = rawSize === 0 || ratio < 0.8; // Recommend RLE if it saves at least 20%
+  
+  return {
+    rawSize,
+    rleSize,
+    ratio,
+    recommended,
+  };
+}

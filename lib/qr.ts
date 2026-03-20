@@ -9,6 +9,16 @@ const EC_MAP: Record<ECLevel, string> = {
   [ECLevel.H]: 'H',
 };
 
+// Memoize sorted versions array to avoid re-sorting each call
+let cachedSortedVersions: number[] | null = null;
+
+function getSortedVersions(): number[] {
+  if (cachedSortedVersions === null) {
+    cachedSortedVersions = Object.keys(QR_VERSIONS).map(Number).sort((a, b) => a - b);
+  }
+  return cachedSortedVersions;
+}
+
 /**
  * Create a QrMessage from text input.
  * Automatically selects the smallest QR version that fits within MAX_PAYLOAD.
@@ -22,7 +32,7 @@ export function createQrMessage(text: string, opts?: QrSendOptions): QrMessage {
   }
 
   // Try versions 1-4 in order, pick smallest that works
-  const versions = Object.keys(QR_VERSIONS).map(Number).sort((a, b) => a - b);
+  const versions = getSortedVersions();
   for (const version of versions) {
     try {
       return generateQr(text, version, ecLevel);

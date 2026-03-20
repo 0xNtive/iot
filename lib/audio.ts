@@ -1,4 +1,4 @@
-const SAMPLE_RATE = 48000;
+const DEFAULT_SAMPLE_RATE = 48000;
 const BUFFER_SIZE = 1024;
 
 export class AudioManager {
@@ -8,9 +8,14 @@ export class AudioManager {
   private processorNode: ScriptProcessorNode | null = null;
   private onAudioData: ((samples: Float32Array) => void) | null = null;
   private onAudioLevel: ((level: number) => void) | null = null;
+  private sampleRate: number;
+
+  constructor(sampleRate: number = DEFAULT_SAMPLE_RATE) {
+    this.sampleRate = sampleRate;
+  }
 
   async init(): Promise<void> {
-    this.audioCtx = new AudioContext({ sampleRate: SAMPLE_RATE });
+    this.audioCtx = new AudioContext({ sampleRate: this.sampleRate });
     if (this.audioCtx.state === 'suspended') {
       await this.audioCtx.resume();
     }
@@ -27,7 +32,7 @@ export class AudioManager {
 
     this.stream = await navigator.mediaDevices.getUserMedia({
       audio: {
-        sampleRate: SAMPLE_RATE,
+        sampleRate: this.sampleRate,
         channelCount: 1,
         echoCancellation: false,
         autoGainControl: false,
