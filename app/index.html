@@ -1,307 +1,1668 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>WAVEPX</title>
-  <meta name="description" content="Transmit files, images, and data over sound. Fountain codes, DEFLATE compression, reliable transfer.">
-  <meta property="og:title" content="WAVEPX — Data Over Sound">
-  <meta property="og:description" content="Transmit files, images, and data through sound. No internet required.">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%230a0a0f'/><rect x='2' y='4' width='3' height='3' fill='%2300ff88'/><rect x='6' y='2' width='3' height='5' fill='%2300ff88'/><rect x='10' y='5' width='3' height='3' fill='%2300ff88'/><rect x='4' y='9' width='3' height='4' fill='%2300ff88'/><rect x='9' y='10' width='3' height='3' fill='%2300ff88'/></svg>">
-  <link rel="stylesheet" href="./style.css" />
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WAVEPX — Data Over Sound</title>
+<meta name="description" content="Transmit files, images, and data through audio. Fountain codes, DEFLATE compression, reliable transfer protocol. npm install wavepx">
+<meta property="og:title" content="WAVEPX — Data Over Sound">
+<meta property="og:description" content="Transmit files, images, and data through sound. Fountain codes, DEFLATE compression, reliable transfer. No internet required.">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%230a0a0f'/><rect x='2' y='4' width='3' height='3' fill='%2300ff88'/><rect x='6' y='2' width='3' height='5' fill='%2300ff88'/><rect x='10' y='5' width='3' height='3' fill='%2300ff88'/><rect x='4' y='9' width='3' height='4' fill='%2300ff88'/><rect x='9' y='10' width='3' height='3' fill='%2300ff88'/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=JetBrains+Mono:ital,wght@0,300;0,400;0,700;1,400&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+
+:root {
+  --bg: #0a0a0f;
+  --bg-card: #0e0e16;
+  --bg-code: #0c0c14;
+  --border: #1a1a2e;
+  --border-bright: #2a2a4a;
+  --green: #00ff88;
+  --green-dim: #00cc6a;
+  --green-dark: #00aa55;
+  --green-glow: rgba(0,255,136,0.15);
+  --green-glow-strong: rgba(0,255,136,0.3);
+  --pink: #ff0066;
+  --pink-dim: #cc0052;
+  --yellow: #ffaa00;
+  --cyan: #00ddff;
+  --text: #c8c8d8;
+  --text-dim: #6a6a8a;
+  --text-faint: #3a3a5a;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'JetBrains Mono', monospace;
+  background: var(--bg);
+  color: var(--text);
+  overflow-x: hidden;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ═══ SCANLINE OVERLAY ═══ */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0,0,0,0.03) 2px,
+    rgba(0,0,0,0.03) 4px
+  );
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* ═══ NOISE TEXTURE ═══ */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  opacity: 0.025;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 9998;
+}
+
+/* ═══ SELECTION ═══ */
+::selection {
+  background: var(--green);
+  color: var(--bg);
+}
+
+/* ═══ SCROLLBAR ═══ */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--green-dark); }
+
+/* ═══ LAYOUT ═══ */
+.container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+section {
+  padding: 100px 0;
+  position: relative;
+}
+
+/* ═══ NAV ═══ */
+nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  background: rgba(10,10,15,0.85);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+}
+
+nav .inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 56px;
+}
+
+nav .logo {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 14px;
+  color: var(--green);
+  text-decoration: none;
+  letter-spacing: 3px;
+  text-shadow: 0 0 20px var(--green-glow-strong);
+}
+
+nav .links {
+  display: flex;
+  gap: 28px;
+  list-style: none;
+}
+
+nav .links a {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  color: var(--text-dim);
+  text-decoration: none;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  transition: color 0.2s;
+}
+
+nav .links a:hover { color: var(--green); }
+
+/* ═══ HERO ═══ */
+.hero {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  padding-top: 56px;
+}
+
+/* Animated pixel grid background */
+.hero-grid {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(32, 1fr);
+  grid-template-rows: repeat(18, 1fr);
+  gap: 1px;
+  opacity: 0.08;
+  z-index: 0;
+}
+
+.hero-grid .cell {
+  background: var(--green);
+  opacity: 0;
+  animation: cellPulse 4s ease-in-out infinite;
+}
+
+@keyframes cellPulse {
+  0%, 100% { opacity: 0; }
+  50% { opacity: 1; }
+}
+
+/* Stagger cells */
+.hero-grid .cell:nth-child(3n+1) { animation-delay: 0s; }
+.hero-grid .cell:nth-child(5n+2) { animation-delay: 0.8s; }
+.hero-grid .cell:nth-child(7n+3) { animation-delay: 1.6s; }
+.hero-grid .cell:nth-child(11n+4) { animation-delay: 2.4s; }
+.hero-grid .cell:nth-child(13n+5) { animation-delay: 0.4s; }
+.hero-grid .cell:nth-child(17n+6) { animation-delay: 1.2s; }
+.hero-grid .cell:nth-child(19n+7) { animation-delay: 2.0s; }
+.hero-grid .cell:nth-child(23n+8) { animation-delay: 2.8s; }
+
+/* Sound wave lines */
+.hero-waves {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 200px;
+  overflow: hidden;
+  z-index: 0;
+}
+
+.hero-waves .wave {
+  position: absolute;
+  bottom: 0;
+  left: -50%;
+  width: 200%;
+  height: 100%;
+  background: repeating-linear-gradient(
+    90deg,
+    transparent,
+    transparent 48px,
+    var(--green) 48px,
+    var(--green) 49px
+  );
+  opacity: 0.04;
+  animation: waveScroll 8s linear infinite;
+}
+
+.hero-waves .wave:nth-child(2) {
+  animation-duration: 12s;
+  animation-direction: reverse;
+  opacity: 0.03;
+}
+
+.hero-waves .wave:nth-child(3) {
+  animation-duration: 6s;
+  opacity: 0.02;
+  background: repeating-linear-gradient(
+    90deg,
+    transparent,
+    transparent 24px,
+    var(--pink) 24px,
+    var(--pink) 25px
+  );
+}
+
+@keyframes waveScroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(50%); }
+}
+
+.hero-content {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  max-width: 800px;
+  padding: 0 24px;
+}
+
+.hero-badge {
+  display: inline-block;
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  color: var(--green);
+  border: 1px solid var(--green-dark);
+  padding: 6px 16px;
+  border-radius: 2px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  margin-bottom: 32px;
+  background: rgba(0,255,136,0.05);
+  animation: fadeInUp 0.8s ease both;
+}
+
+.hero h1 {
+  font-family: 'Press Start 2P', cursive;
+  font-size: clamp(36px, 7vw, 72px);
+  color: var(--green);
+  letter-spacing: 8px;
+  text-shadow:
+    0 0 40px var(--green-glow-strong),
+    0 0 80px rgba(0,255,136,0.1);
+  margin-bottom: 24px;
+  animation: fadeInUp 0.8s ease 0.1s both;
+}
+
+.hero .subtitle {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: clamp(14px, 2vw, 18px);
+  color: var(--text-dim);
+  font-weight: 300;
+  max-width: 580px;
+  margin: 0 auto 48px;
+  line-height: 1.8;
+  animation: fadeInUp 0.8s ease 0.2s both;
+}
+
+.hero .subtitle strong {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.hero-actions {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+  animation: fadeInUp 0.8s ease 0.3s both;
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ═══ BUTTONS ═══ */
+.btn {
+  font-family: 'Space Mono', monospace;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 14px 32px;
+  border: 1px solid var(--border-bright);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  text-decoration: none;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn:hover {
+  border-color: var(--green);
+  color: var(--green);
+  box-shadow: 0 0 20px var(--green-glow);
+}
+
+.btn-primary {
+  background: var(--green);
+  color: var(--bg);
+  border-color: var(--green);
+}
+
+.btn-primary:hover {
+  background: var(--green-dim);
+  border-color: var(--green-dim);
+  color: var(--bg);
+  box-shadow: 0 0 30px var(--green-glow-strong);
+}
+
+.btn-install {
+  font-family: 'JetBrains Mono', monospace;
+  background: var(--bg-code);
+  border-color: var(--border);
+  color: var(--green);
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.btn-install::before {
+  content: '$';
+  color: var(--text-dim);
+  margin-right: 4px;
+}
+
+.btn-install:hover {
+  border-color: var(--green-dark);
+}
+
+/* ═══ SECTION HEADERS ═══ */
+.section-label {
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  color: var(--pink);
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+
+.section-title {
+  font-family: 'Press Start 2P', cursive;
+  font-size: clamp(16px, 3vw, 24px);
+  color: var(--green);
+  letter-spacing: 3px;
+  margin-bottom: 20px;
+  line-height: 1.6;
+}
+
+.section-desc {
+  font-size: 14px;
+  color: var(--text-dim);
+  max-width: 640px;
+  line-height: 1.8;
+}
+
+/* ═══ DIVIDERS ═══ */
+.divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border-bright) 20%, var(--border-bright) 80%, transparent);
+  margin: 0;
+}
+
+/* ═══ WHAT IS WAVEPX ═══ */
+.what-section {
+  padding: 120px 0;
+}
+
+.what-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 80px;
+  align-items: center;
+  margin-top: 60px;
+}
+
+.what-visual {
+  position: relative;
+  aspect-ratio: 1;
+  max-width: 400px;
+}
+
+.what-visual .ring {
+  position: absolute;
+  border: 1px solid var(--border-bright);
+  border-radius: 50%;
+  animation: ringExpand 3s ease-out infinite;
+}
+
+.what-visual .ring:nth-child(1) { inset: 30%; animation-delay: 0s; }
+.what-visual .ring:nth-child(2) { inset: 20%; animation-delay: 1s; }
+.what-visual .ring:nth-child(3) { inset: 10%; animation-delay: 2s; }
+.what-visual .ring:nth-child(4) { inset: 0%; animation-delay: 0.5s; }
+
+@keyframes ringExpand {
+  0% { opacity: 0.6; border-color: var(--green-dark); transform: scale(0.9); }
+  100% { opacity: 0; border-color: var(--green); transform: scale(1.1); }
+}
+
+.what-visual .center-icon {
+  position: absolute;
+  inset: 35%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Press Start 2P', cursive;
+  font-size: 28px;
+  color: var(--green);
+  text-shadow: 0 0 30px var(--green-glow-strong);
+  border: 2px solid var(--green-dark);
+  border-radius: 50%;
+  background: rgba(0,255,136,0.03);
+}
+
+.what-text h3 {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 11px;
+  color: var(--green);
+  letter-spacing: 2px;
+  margin-bottom: 20px;
+  line-height: 1.8;
+}
+
+.what-text p {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-bottom: 16px;
+  line-height: 1.9;
+}
+
+.what-text p strong {
+  color: var(--text);
+}
+
+.not-just {
+  margin-top: 24px;
+  padding: 16px 20px;
+  border-left: 3px solid var(--pink);
+  background: rgba(255,0,102,0.03);
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.8;
+}
+
+.not-just strong {
+  color: var(--pink);
+}
+
+/* ═══ FEATURES ═══ */
+.features-section {
+  padding: 120px 0;
+}
+
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2px;
+  margin-top: 60px;
+  background: var(--border);
+}
+
+.feature-card {
+  background: var(--bg-card);
+  padding: 36px 28px;
+  transition: all 0.3s;
+  position: relative;
+  overflow: hidden;
+}
+
+.feature-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--green);
+  transform: scaleX(0);
+  transition: transform 0.3s;
+}
+
+.feature-card:hover::before {
+  transform: scaleX(1);
+}
+
+.feature-card:hover {
+  background: #111120;
+}
+
+.feature-icon {
+  font-size: 24px;
+  margin-bottom: 16px;
+  display: block;
+  filter: grayscale(0.3);
+}
+
+.feature-card h3 {
+  font-family: 'Space Mono', monospace;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.feature-card p {
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.7;
+}
+
+.feature-tag {
+  display: inline-block;
+  font-size: 9px;
+  color: var(--green);
+  border: 1px solid var(--border-bright);
+  padding: 2px 8px;
+  border-radius: 2px;
+  margin-top: 12px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+/* ═══ ARCHITECTURE ═══ */
+.arch-section {
+  padding: 120px 0;
+}
+
+.arch-stack {
+  margin-top: 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  max-width: 700px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.arch-layer {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  border: 1px solid var(--border);
+  border-bottom: none;
+  background: var(--bg-card);
+  transition: all 0.2s;
+}
+
+.arch-layer:last-child { border-bottom: 1px solid var(--border); }
+
+.arch-layer:hover {
+  border-color: var(--green-dark);
+  z-index: 1;
+}
+
+.arch-label {
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--green);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  padding: 16px 20px;
+  border-right: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  background: rgba(0,255,136,0.02);
+}
+
+.arch-desc {
+  font-size: 12px;
+  color: var(--text-dim);
+  padding: 16px 20px;
+  line-height: 1.6;
+}
+
+.arch-desc code {
+  color: var(--yellow);
+  font-size: 11px;
+}
+
+.arch-arrow {
+  text-align: center;
+  color: var(--text-faint);
+  font-size: 18px;
+  padding: 4px 0;
+  letter-spacing: 8px;
+}
+
+/* ═══ CODE EXAMPLE ═══ */
+.code-section {
+  padding: 120px 0;
+}
+
+.code-tabs {
+  display: flex;
+  gap: 0;
+  margin-top: 60px;
+}
+
+.code-tab {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  padding: 10px 24px;
+  background: var(--bg-card);
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  border-bottom: none;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  transition: all 0.2s;
+}
+
+.code-tab.active {
+  color: var(--green);
+  background: var(--bg-code);
+  border-color: var(--green-dark);
+  border-bottom-color: var(--bg-code);
+}
+
+.code-block {
+  background: var(--bg-code);
+  border: 1px solid var(--border);
+  border-radius: 0 0 2px 2px;
+  padding: 28px 32px;
+  overflow-x: auto;
+  display: none;
+}
+
+.code-block.active { display: block; }
+
+.code-block pre {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  line-height: 1.8;
+  color: var(--text);
+}
+
+.code-block .comment { color: var(--text-faint); }
+.code-block .keyword { color: var(--pink); }
+.code-block .string { color: var(--green); }
+.code-block .fn { color: var(--cyan); }
+.code-block .const { color: var(--yellow); }
+
+/* ═══ API REFERENCE ═══ */
+.api-section {
+  padding: 120px 0;
+}
+
+.api-group {
+  margin-top: 48px;
+}
+
+.api-group-title {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 11px;
+  color: var(--cyan);
+  letter-spacing: 2px;
+  margin-bottom: 24px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.api-item {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  margin-bottom: 2px;
+  padding: 20px 24px;
+  transition: border-color 0.2s;
+}
+
+.api-item:hover {
+  border-color: var(--border-bright);
+}
+
+.api-sig {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+.api-sig .method { color: var(--cyan); }
+.api-sig .type { color: var(--yellow); }
+.api-sig .param { color: var(--text); }
+.api-sig .punct { color: var(--text-dim); }
+
+.api-desc {
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.6;
+}
+
+.api-returns {
+  font-size: 11px;
+  color: var(--text-faint);
+  margin-top: 6px;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* ═══ WIRE PROTOCOL ═══ */
+.wire-section {
+  padding: 120px 0;
+}
+
+.wire-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 32px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+}
+
+.wire-table th {
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  color: var(--green);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  text-align: left;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--green-dark);
+  background: var(--bg-card);
+}
+
+.wire-table td {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-dim);
+}
+
+.wire-table tr:hover td {
+  background: rgba(0,255,136,0.02);
+}
+
+.wire-table .hex {
+  color: var(--green);
+  font-weight: 700;
+}
+
+.wire-table .type-name {
+  color: var(--cyan);
+}
+
+.wire-subtable {
+  margin-top: 24px;
+}
+
+.wire-subtable-title {
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  color: var(--yellow);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin-bottom: 12px;
+}
+
+/* ═══ SPECS ═══ */
+.specs-section {
+  padding: 120px 0;
+}
+
+.specs-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 2px;
+  margin-top: 60px;
+  background: var(--border);
+}
+
+.spec-card {
+  background: var(--bg-card);
+  padding: 32px 24px;
+  text-align: center;
+}
+
+.spec-value {
+  font-family: 'Press Start 2P', cursive;
+  font-size: clamp(20px, 3vw, 32px);
+  color: var(--green);
+  text-shadow: 0 0 20px var(--green-glow);
+  margin-bottom: 8px;
+}
+
+.spec-unit {
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+.spec-label {
+  font-size: 11px;
+  color: var(--text-faint);
+  margin-top: 12px;
+  line-height: 1.5;
+}
+
+/* ═══ SCIENCE ═══ */
+.science-section {
+  padding: 120px 0;
+}
+
+.science-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 40px;
+  margin-top: 60px;
+}
+
+.science-card {
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  padding: 32px;
+  position: relative;
+}
+
+.science-card::after {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: 20px;
+  width: 40px;
+  height: 3px;
+}
+
+.science-card:nth-child(1)::after { background: var(--green); }
+.science-card:nth-child(2)::after { background: var(--pink); }
+.science-card:nth-child(3)::after { background: var(--yellow); }
+.science-card:nth-child(4)::after { background: var(--cyan); }
+
+.science-card h3 {
+  font-family: 'Space Mono', monospace;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.science-card p {
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.8;
+}
+
+.science-card .formula {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--yellow);
+  background: rgba(255,170,0,0.05);
+  padding: 8px 12px;
+  margin-top: 12px;
+  border-left: 2px solid var(--yellow);
+}
+
+/* ═══ CTA ═══ */
+.cta-section {
+  padding: 120px 0;
+  text-align: center;
+}
+
+.cta-section .section-title {
+  margin-bottom: 16px;
+}
+
+.cta-section .section-desc {
+  margin: 0 auto 40px;
+}
+
+/* ═══ FOOTER ═══ */
+footer {
+  border-top: 1px solid var(--border);
+  padding: 40px 0;
+}
+
+footer .inner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+footer .logo {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 10px;
+  color: var(--text-faint);
+  letter-spacing: 3px;
+}
+
+footer .footer-links {
+  display: flex;
+  gap: 24px;
+  list-style: none;
+}
+
+footer .footer-links a {
+  font-size: 11px;
+  color: var(--text-dim);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+footer .footer-links a:hover { color: var(--green); }
+
+/* ═══ RESPONSIVE ═══ */
+@media (max-width: 900px) {
+  .what-grid { grid-template-columns: 1fr; gap: 40px; }
+  .what-visual { max-width: 260px; margin: 0 auto; }
+  .features-grid { grid-template-columns: 1fr 1fr; }
+  .specs-grid { grid-template-columns: 1fr 1fr; }
+  .science-grid { grid-template-columns: 1fr; }
+  .arch-layer { grid-template-columns: 100px 1fr; }
+}
+
+@media (max-width: 600px) {
+  section { padding: 80px 0; }
+  .features-grid { grid-template-columns: 1fr; }
+  .specs-grid { grid-template-columns: 1fr 1fr; }
+  nav .links { gap: 12px; }
+  nav .links a { font-size: 8px; letter-spacing: 1px; }
+  .hero-actions { flex-direction: column; align-items: center; }
+  .code-tabs { overflow-x: auto; }
+  .arch-layer { grid-template-columns: 1fr; }
+  .arch-label { border-right: none; border-bottom: 1px solid var(--border); }
+  footer .inner { flex-direction: column; gap: 20px; text-align: center; }
+  .wire-table { font-size: 10px; }
+  .wire-table th, .wire-table td { padding: 8px 10px; }
+  .api-sig { font-size: 11px; }
+}
+</style>
 </head>
 <body>
-  <div id="app">
-    <header class="header">
-      <h1 class="logo">WAVEPX</h1>
-      <span class="tagline">data over sound</span>
-    </header>
 
-    <nav class="tabs">
-      <button class="tab active" data-tab="draw">Draw</button>
-      <button class="tab" data-tab="image">Image</button>
-      <button class="tab" data-tab="qr">QR Code</button>
-      <button class="tab" data-tab="text">Text</button>
-      <button class="tab" data-tab="transfer">Transfer</button>
-      <button class="tab" data-tab="arena">Arena</button>
-      <button class="tab" data-tab="game">Game</button>
-    </nav>
-
-    <main class="panels">
-      <div class="panel-row">
-        <section class="panel send-panel">
-          <h2 class="panel-title">SEND</h2>
-
-          <!-- Draw tab -->
-          <div class="tab-content active" id="tab-draw">
-            <div class="grid-controls">
-              <label>Grid:
-                <select id="grid-size">
-                  <option value="8">8x8</option>
-                  <option value="16" selected>16x16</option>
-                  <option value="24">24x24</option>
-                  <option value="32">32x32</option>
-                  <option value="64">64x64</option>
-                  <option value="128">128x128</option>
-                  <option value="256">256x256</option>
-                  <option value="512">512x512</option>
-                </select>
-              </label>
-              <label>Mode:
-                <select id="color-mode">
-                  <option value="bw" selected>B&W</option>
-                  <option value="gray4">4 gray</option>
-                  <option value="gray16">16 gray</option>
-                </select>
-              </label>
-              <button id="clear-canvas" class="btn-small">Clear</button>
-            </div>
-            <canvas id="pixel-canvas" width="320" height="320"></canvas>
-            <div id="chunk-info" class="chunk-info"></div>
-            <details class="edu-blurb">
-              <summary>How pixel encoding works</summary>
-              <div class="edu-content">
-                <p>Each pixel is packed into the minimum number of bits for the selected mode. In B&W mode, one bit per pixel — 8 pixels fit in a single byte. At 4 gray levels, each pixel needs 2 bits (4 per byte). At 16 levels, 4 bits each (2 per byte).</p>
-                <p>The encoder compares raw bit-packing against RLE (run-length encoding) and sends whichever is smaller. RLE replaces repeated values with a count+value pair, which works well for images with large solid areas.</p>
-              </div>
-            </details>
-          </div>
-
-          <!-- Image tab -->
-          <div class="tab-content" id="tab-image">
-            <div class="grid-controls">
-              <label>Grid:
-                <select id="image-grid-size">
-                  <option value="8">8x8</option>
-                  <option value="16" selected>16x16</option>
-                  <option value="24">24x24</option>
-                  <option value="32">32x32</option>
-                  <option value="64">64x64</option>
-                  <option value="128">128x128</option>
-                  <option value="256">256x256</option>
-                  <option value="512">512x512</option>
-                </select>
-              </label>
-              <label>Mode:
-                <select id="image-color-mode">
-                  <option value="bw" selected>B&W</option>
-                  <option value="gray4">4 gray</option>
-                  <option value="gray16">16 gray</option>
-                  <option value="color16">16 color</option>
-                </select>
-              </label>
-              <label>Dither:
-                <select id="image-dither-mode">
-                  <option value="none">None</option>
-                  <option value="floyd-steinberg">Floyd-Steinberg</option>
-                  <option value="atkinson">Atkinson</option>
-                </select>
-              </label>
-              <label>Encoding:
-                <select id="image-encoding">
-                  <option value="linear">Linear</option>
-                  <option value="palette">Palette</option>
-                </select>
-              </label>
-              <label class="btn-small upload-btn">
-                Load Image
-                <input type="file" id="image-upload" accept="image/*" hidden />
-              </label>
-              <button id="image-clear" class="btn-small">Clear</button>
-            </div>
-            <canvas id="image-canvas" width="320" height="320"></canvas>
-            <div id="image-chunk-info" class="chunk-info"></div>
-            <details class="edu-blurb">
-              <summary>What is dithering?</summary>
-              <div class="edu-content">
-                <p>Dithering simulates shades your display can't actually show by carefully placing dots of the available colors. Instead of rounding each pixel to the nearest level (which loses detail), dithering spreads the rounding error to neighboring pixels.</p>
-                <p><strong>Floyd-Steinberg</strong> distributes error to 4 neighbors — smooth gradients, natural look. <strong>Atkinson</strong> spreads error to 6 neighbors but only 75% of it — higher contrast, great for pixel art. Try both on the same image to see the difference!</p>
-              </div>
-            </details>
-          </div>
-
-          <!-- QR tab -->
-          <div class="tab-content" id="tab-qr">
-            <textarea id="qr-input" placeholder="Enter text or URL..." rows="3"></textarea>
-            <div class="qr-options">
-              <label>EC Level:
-                <select id="qr-ec">
-                  <option value="0">L (7%)</option>
-                  <option value="1" selected>M (15%)</option>
-                  <option value="2">Q (25%)</option>
-                  <option value="3">H (30%)</option>
-                </select>
-              </label>
-            </div>
-            <canvas id="qr-preview" width="320" height="320"></canvas>
-          </div>
-
-          <!-- Text tab -->
-          <div class="tab-content" id="tab-text">
-            <textarea id="text-input" placeholder="Type a message..." rows="5" maxlength="138"></textarea>
-            <div class="byte-counter"><span id="byte-count">0</span>/138 bytes</div>
-            <div id="text-hint" class="text-hint" hidden>Over 138 bytes — use the Transfer tab for longer messages</div>
-          </div>
-
-          <!-- Transfer tab -->
-          <div class="tab-content" id="tab-transfer">
-            <div class="transfer-drop-zone" id="transfer-drop-zone">
-              <div class="transfer-drop-text">Drop a file here or click to select</div>
-              <div class="transfer-drop-hint">Max 64KB — compressed with DEFLATE, sent with fountain codes</div>
-              <input type="file" id="transfer-file-input" hidden />
-            </div>
-            <div id="transfer-file-info" class="transfer-file-info" hidden>
-              <span id="transfer-file-name"></span>
-              <span id="transfer-file-size"></span>
-              <button id="transfer-send-btn" class="btn-small" hidden>Send</button>
-            </div>
-            <div id="transfer-progress-section" class="transfer-progress-section" hidden>
-              <div class="transfer-bar-inner">
-                <div class="transfer-fill" id="transfer-send-fill"></div>
-                <span class="transfer-text" id="transfer-send-text"></span>
-              </div>
-            </div>
-            <div id="transfer-status" class="transfer-status"></div>
-            <div id="transfer-receive-section" class="transfer-receive-section" hidden>
-              <div class="transfer-bar-inner">
-                <div class="transfer-fill" id="transfer-recv-fill"></div>
-                <span class="transfer-text" id="transfer-recv-text"></span>
-              </div>
-              <a id="transfer-download-link" class="btn-small" hidden>Download</a>
-            </div>
-            <details class="edu-blurb">
-              <summary>How fountain codes work</summary>
-              <div class="edu-content">
-                <p><strong>Fountain codes</strong> let the receiver reconstruct data from <em>any</em> sufficient subset of encoded blocks — no specific blocks are required. The sender generates more blocks than strictly needed (50% extra by default), so the receiver can tolerate lost blocks without retransmission.</p>
-                <p>Each parity block is the XOR of 2-3 source blocks. When a source block is lost, the receiver recovers it by XORing a parity block with the other known sources. The payload is compressed with <strong>DEFLATE</strong> first (3-5x for text), and a CRC-32 hash verifies integrity after reassembly.</p>
-                <p>The protocol: sender broadcasts a SYN (file metadata), receiver replies SYN_ACK, sender bursts all data blocks, receiver sends DONE when complete. Only 2 turn-arounds needed — the half-duplex audio channel stays efficient.</p>
-              </div>
-            </details>
-          </div>
-
-          <!-- Arena tab -->
-          <div class="tab-content" id="tab-arena">
-            <div id="arena-container"></div>
-            <details class="edu-blurb">
-              <summary>How compression strategies compare</summary>
-              <div class="edu-content">
-                <p><strong>Raw</strong> packs pixels into the minimum bits with no compression — fast but bulky. <strong>RLE</strong> (run-length encoding) replaces runs of identical values with count+value pairs — great for simple graphics with solid areas.</p>
-                <p><strong>Palette</strong> mode finds the 16 most representative colors in your image, then stores each pixel as a 4-bit index. Each row is further RLE-compressed. The arena shows the byte count and chunk count for each strategy so you can see which wins for your image.</p>
-              </div>
-            </details>
-          </div>
-
-          <!-- Game tab -->
-          <div class="tab-content" id="tab-game">
-            <div class="game-layout">
-              <div class="game-grid-section">
-                <div class="game-grid-label">YOUR FLEET</div>
-                <div class="game-grid-wrapper">
-                  <div class="game-col-labels">
-                    <span></span>
-                    <span>A</span><span>B</span><span>C</span><span>D</span>
-                    <span>E</span><span>F</span><span>G</span><span>H</span>
-                  </div>
-                  <div class="game-grid-row">
-                    <div class="game-row-labels">
-                      <span>1</span><span>2</span><span>3</span><span>4</span>
-                      <span>5</span><span>6</span><span>7</span><span>8</span>
-                    </div>
-                    <canvas id="game-my-grid" width="256" height="256"></canvas>
-                  </div>
-                </div>
-              </div>
-              <div class="game-grid-section">
-                <div class="game-grid-label">TARGET</div>
-                <div class="game-grid-wrapper">
-                  <div class="game-col-labels">
-                    <span></span>
-                    <span>A</span><span>B</span><span>C</span><span>D</span>
-                    <span>E</span><span>F</span><span>G</span><span>H</span>
-                  </div>
-                  <div class="game-grid-row">
-                    <div class="game-row-labels">
-                      <span>1</span><span>2</span><span>3</span><span>4</span>
-                      <span>5</span><span>6</span><span>7</span><span>8</span>
-                    </div>
-                    <canvas id="game-target-grid" width="256" height="256"></canvas>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div id="game-status" class="game-status">Place your ships</div>
-            <div id="game-ship-roster" class="game-ship-roster"></div>
-            <div class="game-controls">
-              <button id="game-rotate" class="btn-small">Rotate</button>
-              <button id="game-ready" class="btn-small">Ready</button>
-              <button id="game-new" class="btn-small">New Game</button>
-            </div>
-            <details class="edu-blurb">
-              <summary>How the game protocol works</summary>
-              <div class="edu-content">
-                <p>Battleship over sound uses a simple frame protocol. Each message starts with a type byte (0x05 = game) and a subtype: <strong>SETUP</strong> (hash of ship positions for turn order), <strong>SHOT</strong> (x,y coordinates), <strong>RESULT</strong> (hit/miss/sunk), and <strong>WIN</strong>.</p>
-                <p>Turn order is decided by comparing placement hashes — the lower hash goes first. Each shot-result exchange is a two-frame round trip sent via audio. The entire game typically uses about 20-40 audio transmissions.</p>
-              </div>
-            </details>
-          </div>
-        </section>
-
-        <section class="panel receive-panel">
-          <h2 class="panel-title">RECEIVE</h2>
-          <div id="receive-display">
-            <div class="receive-placeholder">Listening for transmissions...</div>
-          </div>
-          <div id="receive-info" class="receive-info"></div>
-        </section>
-      </div>
-    </main>
-
-    <footer class="controls">
-      <div class="controls-row">
-        <label>Protocol:
-          <select id="protocol-select">
-            <option value="0">Audible Normal</option>
-            <option value="1" selected>Audible Fast</option>
-            <option value="2">Audible Fastest</option>
-            <option value="3">Ultrasound Normal</option>
-            <option value="4">Ultrasound Fast</option>
-            <option value="5">Ultrasound Fastest</option>
-            <option value="6">DT800 Normal</option>
-            <option value="7">DT800 Fast</option>
-            <option value="8">DT800 Fastest</option>
-          </select>
-        </label>
-        <label class="volume-label">Volume:
-          <input type="range" id="volume-slider" min="0" max="100" value="50" />
-          <span id="volume-value">50%</span>
-        </label>
-      </div>
-      <div class="controls-row">
-        <button id="btn-listen" class="btn">Start Listening</button>
-        <button id="btn-send" class="btn btn-primary">SEND</button>
-        <button id="btn-pause" class="btn btn-pause" hidden>PAUSE</button>
-        <button id="btn-stop" class="btn btn-stop" hidden>STOP</button>
-        <button id="btn-download" class="btn">WAV</button>
-      </div>
-      <div class="transfer-bar" id="transfer-bar" hidden>
-        <div class="transfer-fill" id="transfer-fill"></div>
-        <span class="transfer-text" id="transfer-text"></span>
-      </div>
-      <div class="status-bar" id="status-bar">
-        <span id="status-state">Status: Idle</span>
-        <canvas id="audio-visualizer" width="200" height="28"></canvas>
-        <span id="status-payload"><span id="payload-size">0</span> B <span id="chunk-count"></span></span>
-      </div>
-      <details class="edu-blurb edu-blurb-footer">
-        <summary>How ggwave encodes audio</summary>
-        <div class="edu-content">
-          <p>WAVEPX is built on top of <strong><a href="https://github.com/ggerganov/ggwave" target="_blank" style="color:var(--accent)">ggwave</a></strong> by <a href="https://github.com/ggerganov" target="_blank" style="color:var(--accent)">Georgi Gerganov</a>, which encodes data as audio tones using FSK (frequency-shift keying). Each byte is mapped to a specific frequency, and the receiver uses FFT to decode it back.</p>
-          <p><strong>Audible</strong> mode uses frequencies you can hear (~1-4 kHz) — good for demos. <strong>Ultrasound</strong> uses 15-20 kHz — nearly inaudible to most people. <strong>DT800</strong> uses dual-tone encoding for better noise resistance. Faster protocols pack more data per second but are more sensitive to noise.</p>
-        </div>
-      </details>
-    </footer>
+<!-- NAV -->
+<nav>
+  <div class="inner">
+    <a href="#" class="logo">WAVEPX</a>
+    <ul class="links">
+      <li><a href="#features">Features</a></li>
+      <li><a href="#architecture">Stack</a></li>
+      <li><a href="#code">Code</a></li>
+      <li><a href="#api">API</a></li>
+      <li><a href="#wire">Protocol</a></li>
+      <li><a href="#specs">Specs</a></li>
+      <li><a href="./app.html">Launch App</a></li>
+    </ul>
   </div>
+</nav>
 
-  <script type="module" src="./main.ts"></script>
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-grid" id="heroGrid"></div>
+  <div class="hero-waves">
+    <div class="wave"></div>
+    <div class="wave"></div>
+    <div class="wave"></div>
+  </div>
+  <div class="hero-content">
+    <div class="hero-badge">v0.1.0 // open source</div>
+    <h1>WAVEPX</h1>
+    <p class="subtitle">
+      Transmit <strong>files, images, and data</strong> through sound.
+      Fountain codes. DEFLATE compression. Reliable transfer protocol.
+      No internet required.
+    </p>
+    <div class="hero-actions">
+      <a href="./app.html" class="btn btn-primary">Launch App</a>
+      <a href="#code" class="btn btn-install">npm install wavepx</a>
+      <a href="https://github.com/0xNtive/wavepx" class="btn">GitHub</a>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- WHAT IS WAVEPX -->
+<section class="what-section" id="about">
+  <div class="container">
+    <div class="section-label">// about</div>
+    <div class="section-title">Built on ggwave.<br>An application framework on top.</div>
+    <div class="what-grid">
+      <div class="what-visual">
+        <div class="ring"></div>
+        <div class="ring"></div>
+        <div class="ring"></div>
+        <div class="ring"></div>
+        <div class="center-icon">~</div>
+      </div>
+      <div class="what-text">
+        <h3>Powered by <a href="https://github.com/ggerganov/ggwave" style="color:var(--green);text-decoration:none;border-bottom:1px solid var(--green-dark)">ggwave</a></h3>
+        <p>
+          <strong><a href="https://github.com/ggerganov/ggwave" style="color:var(--green);text-decoration:none">ggwave</a></strong>
+          by <a href="https://github.com/ggerganov" style="color:var(--cyan);text-decoration:none">Georgi Gerganov</a>
+          is a brilliant data-over-sound library that handles the hardest part &mdash;
+          turning bytes into precisely tuned audio tones and decoding them back using FSK modulation and FFT.
+          It supports 9 protocols across audible, ultrasound, and dual-tone frequency bands.
+          It&rsquo;s the foundation that makes everything here possible.
+        </p>
+        <p>
+          <strong>WAVEPX</strong> is an application framework layer on top of ggwave.
+          It adds multi-frame chunked images with progressive rendering,
+          DEFLATE compression for higher throughput, fountain codes for reliable delivery,
+          palette quantization, dithering, and full application protocols for file transfer and games.
+        </p>
+        <div class="not-just">
+          <strong>Think of it this way:</strong>
+          ggwave is the brilliant physical layer that turns data into sound.
+          WAVEPX adds the application stack on top &mdash; chunking, compression, error recovery, and the UI.
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- FEATURES -->
+<section class="features-section" id="features">
+  <div class="container">
+    <div class="section-label">// capabilities</div>
+    <div class="section-title">Everything the air<br>can carry</div>
+    <div class="section-desc">Nine data types, four compression strategies, and a complete UI. Each feature is both functional and educational.</div>
+    <div class="features-grid">
+      <div class="feature-card">
+        <span class="feature-icon">&#x1F4E1;</span>
+        <h3>File Transfer</h3>
+        <p>Drag-drop any file up to 64KB. SYN/ACK handshake, fountain-coded data burst, CRC-32 verification. Reliable delivery over a lossy audio channel.</p>
+        <span class="feature-tag">fountain codes</span>
+      </div>
+      <div class="feature-card">
+        <span class="feature-icon">&#x1F5BC;</span>
+        <h3>Image Transfer</h3>
+        <p>Load photos, apply dithering (Floyd-Steinberg, Atkinson), and transmit as multi-chunk pixel data. Supports B&W, 4-gray, 16-gray, and 16-color palette modes.</p>
+        <span class="feature-tag">chunked protocol</span>
+      </div>
+      <div class="feature-card">
+        <span class="feature-icon">&#x1F4AC;</span>
+        <h3>Text Messages</h3>
+        <p>Send UTF-8 text up to 138 bytes in a single frame. With DEFLATE compression in transfer mode, send entire paragraphs efficiently.</p>
+        <span class="feature-tag">single frame</span>
+      </div>
+      <div class="feature-card">
+        <span class="feature-icon">&#x1F3AF;</span>
+        <h3>QR Over Sound</h3>
+        <p>Generate and transmit QR codes (versions 1&ndash;4) as bit-packed audio frames. URLs, contact cards, WiFi configs &mdash; no camera needed.</p>
+        <span class="feature-tag">auto-version</span>
+      </div>
+      <div class="feature-card">
+        <span class="feature-icon">&#x1F3AE;</span>
+        <h3>Battleship Game</h3>
+        <p>Full game protocol over sound: ship placement, shot/result exchanges, win detection. Coordinate labels, ghost preview, ship roster, status messages.</p>
+        <span class="feature-tag">game protocol</span>
+      </div>
+      <div class="feature-card">
+        <span class="feature-icon">&#x1F3C6;</span>
+        <h3>Compression Arena</h3>
+        <p>Side-by-side comparison of 7 encoding strategies. See raw vs. RLE vs. palette, byte counts, chunk counts, and visual previews. Learn by seeing.</p>
+        <span class="feature-tag">educational</span>
+      </div>
+      <div class="feature-card">
+        <span class="feature-icon">&#x1F3A8;</span>
+        <h3>Pixel Drawing</h3>
+        <p>Interactive pixel canvas with adjustable grid (8&times;8 to 512&times;512), grayscale modes, and real-time encoding stats. Draw and send pixel art over audio.</p>
+        <span class="feature-tag">interactive</span>
+      </div>
+      <div class="feature-card">
+        <span class="feature-icon">&#x1F50D;</span>
+        <h3>Dithering Engine</h3>
+        <p>Floyd-Steinberg and Atkinson error diffusion algorithms. Convert photos to low-bit-depth pixel data while preserving visual quality through perceptual tricks.</p>
+        <span class="feature-tag">image processing</span>
+      </div>
+      <div class="feature-card">
+        <span class="feature-icon">&#x1F4DA;</span>
+        <h3>Built-in Education</h3>
+        <p>Every tab has expandable blurbs explaining the science: how FSK works, why fountain codes tolerate loss, what dithering does. Learning is the feature.</p>
+        <span class="feature-tag">details/summary</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ARCHITECTURE -->
+<section class="arch-section" id="architecture">
+  <div class="container">
+    <div class="section-label">// protocol stack</div>
+    <div class="section-title">Five layers deep</div>
+    <div class="section-desc">From your file to audible tones &mdash; each layer adds reliability, efficiency, or structure.</div>
+    <div class="arch-stack">
+      <div class="arch-layer">
+        <div class="arch-label">Application</div>
+        <div class="arch-desc">File transfer, image viewer, QR generator, text chat, battleship game &mdash; each with its own frame subtype and UI</div>
+      </div>
+      <div class="arch-layer">
+        <div class="arch-label">Fountain</div>
+        <div class="arch-desc">XOR-based erasure coding &mdash; <code>K</code> source blocks + <code>50%</code> parity blocks. Receiver reconstructs from any sufficient subset</div>
+      </div>
+      <div class="arch-layer">
+        <div class="arch-label">Compression</div>
+        <div class="arch-desc">DEFLATE-raw via <code>CompressionStream</code> API. RLE for pixel data. Palette quantization with row-run encoding for color images</div>
+      </div>
+      <div class="arch-layer">
+        <div class="arch-label">Chunking</div>
+        <div class="arch-desc">Splits payloads into <code>140-byte</code> frames with headers: chunk index, total count, dimensions, compression flags, CRC-32</div>
+      </div>
+      <div class="arch-layer">
+        <div class="arch-label">Transport</div>
+        <div class="arch-desc"><a href="https://github.com/ggerganov/ggwave" style="color:var(--green);text-decoration:none">ggwave</a> by Georgi Gerganov &mdash; 9 FSK protocols across audible, ultrasound, and dual-tone bands. <code>48kHz</code> sample rate, AudioWorklet capture</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- CODE -->
+<section class="code-section" id="code">
+  <div class="container">
+    <div class="section-label">// integration</div>
+    <div class="section-title">Three lines to transmit</div>
+    <div class="section-desc">Install the library, create an instance, send. Or just run <code style="color:var(--green)">npx wavepx</code> for the full app.</div>
+    <div class="code-tabs">
+      <button class="code-tab active" onclick="showTab('send',event)">Send</button>
+      <button class="code-tab" onclick="showTab('receive',event)">Receive</button>
+      <button class="code-tab" onclick="showTab('transfer',event)">File Transfer</button>
+      <button class="code-tab" onclick="showTab('cli',event)">CLI</button>
+    </div>
+    <div class="code-block active" id="tab-send">
+<pre><span class="keyword">import</span> { <span class="const">SonicPixel</span> } <span class="keyword">from</span> <span class="string">'wavepx'</span>;
+
+<span class="keyword">const</span> sp = <span class="keyword">new</span> <span class="const">SonicPixel</span>();
+<span class="keyword">await</span> sp.<span class="fn">init</span>();
+
+<span class="comment">// Send text</span>
+<span class="keyword">await</span> sp.<span class="fn">sendText</span>(<span class="string">'hello from the other side'</span>);
+
+<span class="comment">// Send a QR code</span>
+<span class="keyword">await</span> sp.<span class="fn">sendQr</span>(<span class="string">'https://github.com/0xNtive/wavepx'</span>);
+
+<span class="comment">// Send a pixel image (16x16 B&W)</span>
+<span class="keyword">const</span> pixels = <span class="keyword">new</span> <span class="const">Array</span>(<span class="const">256</span>).<span class="fn">fill</span>(<span class="const">false</span>);
+<span class="keyword">await</span> sp.<span class="fn">sendImage</span>(<span class="const">16</span>, <span class="const">16</span>, pixels);</pre>
+    </div>
+    <div class="code-block" id="tab-receive">
+<pre><span class="keyword">import</span> { <span class="const">SonicPixel</span>, <span class="const">FrameType</span> } <span class="keyword">from</span> <span class="string">'wavepx'</span>;
+
+<span class="keyword">const</span> sp = <span class="keyword">new</span> <span class="const">SonicPixel</span>({
+  <span class="fn">onReceive</span>: (msg) => {
+    <span class="keyword">switch</span> (msg.type) {
+      <span class="keyword">case</span> <span class="const">FrameType</span>.<span class="const">TXT</span>:
+        console.<span class="fn">log</span>(<span class="string">'Text:'</span>, msg.text);
+        <span class="keyword">break</span>;
+      <span class="keyword">case</span> <span class="const">FrameType</span>.<span class="const">IMG</span>:
+        console.<span class="fn">log</span>(<span class="string">`Image: ${msg.width}x${msg.height}`</span>);
+        <span class="keyword">break</span>;
+      <span class="keyword">case</span> <span class="const">FrameType</span>.<span class="const">CHUNK</span>:
+        console.<span class="fn">log</span>(<span class="string">'Chunked image complete'</span>);
+        <span class="keyword">break</span>;
+    }
+  },
+});
+
+<span class="keyword">await</span> sp.<span class="fn">init</span>();
+<span class="keyword">await</span> sp.<span class="fn">startListening</span>();  <span class="comment">// mic access required</span></pre>
+    </div>
+    <div class="code-block" id="tab-transfer">
+<pre><span class="keyword">import</span> { <span class="const">SonicPixel</span> } <span class="keyword">from</span> <span class="string">'wavepx'</span>;
+
+<span class="keyword">const</span> sp = <span class="keyword">new</span> <span class="const">SonicPixel</span>({
+  <span class="fn">onTransferMessage</span>: (msg) => {
+    <span class="comment">// Handle incoming transfer protocol frames</span>
+    <span class="comment">// SYN, DATA, DONE are handled automatically</span>
+  },
+});
+<span class="keyword">await</span> sp.<span class="fn">init</span>();
+
+<span class="comment">// Send a file with fountain codes + compression</span>
+<span class="keyword">const</span> data = <span class="keyword">new</span> <span class="const">TextEncoder</span>().<span class="fn">encode</span>(<span class="string">'file contents...'</span>);
+<span class="keyword">await</span> sp.<span class="fn">sendFileTransfer</span>(
+  data.buffer,
+  <span class="string">'notes.txt'</span>,
+  (sent, total, state) => {
+    console.<span class="fn">log</span>(<span class="string">`${state}: ${sent}/${total} blocks`</span>);
+  }
+);</pre>
+    </div>
+    <div class="code-block" id="tab-cli">
+<pre><span class="comment"># Launch the full app locally</span>
+$ <span class="fn">npx</span> <span class="string">wavepx</span>
+
+<span class="comment"># Custom port</span>
+$ <span class="fn">npx</span> <span class="string">wavepx</span> -p <span class="const">8080</span>
+
+<span class="comment"># Or install globally</span>
+$ <span class="fn">npm</span> install -g <span class="string">wavepx</span>
+$ <span class="fn">wavepx</span>
+
+  <span class="string">WAVEPX</span>  data over sound
+
+  Local:   <span class="cyan">http://localhost:3000</span>
+
+  Press Ctrl+C to stop</pre>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- API REFERENCE -->
+<section class="api-section" id="api">
+  <div class="container">
+    <div class="section-label">// reference</div>
+    <div class="section-title">API Reference</div>
+    <div class="section-desc">The complete <code style="color:var(--green)">SonicPixel</code> class API. Import anything from <code style="color:var(--green)">'wavepx'</code>.</div>
+
+    <div class="api-group">
+      <div class="api-group-title">SonicPixel &mdash; Core</div>
+
+      <div class="api-item">
+        <div class="api-sig"><span class="punct">new</span> <span class="method">SonicPixel</span><span class="punct">(</span><span class="param">config</span><span class="punct">?:</span> <span class="type">SonicPixelConfig</span><span class="punct">)</span></div>
+        <div class="api-desc">Create a new instance. Config accepts callbacks: <code>onReceive</code>, <code>onError</code>, <code>onStateChange</code>, <code>onAudioLevel</code>, <code>onChunkProgress</code>, <code>onGameMessage</code>, <code>onTransferMessage</code>. Also <code>protocol</code> (0-8) and <code>volume</code> (0-100).</div>
+      </div>
+
+      <div class="api-item">
+        <div class="api-sig"><span class="method">init</span><span class="punct">():</span> <span class="type">Promise&lt;void&gt;</span></div>
+        <div class="api-desc">Initialize audio context and ggwave transport. Must be called from a user gesture (click/tap) in browsers.</div>
+      </div>
+
+      <div class="api-item">
+        <div class="api-sig"><span class="method">startListening</span><span class="punct">():</span> <span class="type">Promise&lt;void&gt;</span></div>
+        <div class="api-desc">Begin capturing audio from the microphone. Decoded frames are delivered via the <code>onReceive</code> callback. Requires mic permission.</div>
+      </div>
+
+      <div class="api-item">
+        <div class="api-sig"><span class="method">stopListening</span><span class="punct">():</span> <span class="type">void</span></div>
+        <div class="api-desc">Stop audio capture and release microphone.</div>
+      </div>
+
+      <div class="api-item">
+        <div class="api-sig"><span class="method">destroy</span><span class="punct">():</span> <span class="type">void</span></div>
+        <div class="api-desc">Clean up all resources (audio context, ggwave instance, mic stream).</div>
+      </div>
+    </div>
+
+    <div class="api-group">
+      <div class="api-group-title">Sending</div>
+
+      <div class="api-item">
+        <div class="api-sig"><span class="method">sendText</span><span class="punct">(</span><span class="param">text</span><span class="punct">:</span> <span class="type">string</span><span class="punct">):</span> <span class="type">Promise&lt;void&gt;</span></div>
+        <div class="api-desc">Send a UTF-8 text message (up to 138 bytes). Single frame, no chunking.</div>
+      </div>
+
+      <div class="api-item">
+        <div class="api-sig"><span class="method">sendQr</span><span class="punct">(</span><span class="param">text</span><span class="punct">:</span> <span class="type">string</span><span class="punct">,</span> <span class="param">opts</span><span class="punct">?:</span> <span class="type">{ ecLevel?, version? }</span><span class="punct">):</span> <span class="type">Promise&lt;void&gt;</span></div>
+        <div class="api-desc">Generate and send a QR code. Auto-selects the smallest QR version (1-4) that fits. EC levels: L, M, Q, H.</div>
+      </div>
+
+      <div class="api-item">
+        <div class="api-sig"><span class="method">sendImage</span><span class="punct">(</span><span class="param">w, h, pixels</span><span class="punct">):</span> <span class="type">Promise&lt;void&gt;</span></div>
+        <div class="api-desc">Send a 1-bit B&W image. If it fits in 140 bytes, sends as single frame (IMG). Otherwise automatically uses chunked multi-frame.</div>
+      </div>
+
+      <div class="api-item">
+        <div class="api-sig"><span class="method">sendChunkedImage</span><span class="punct">(</span><span class="param">w, h, pixels, onProgress?</span><span class="punct">):</span> <span class="type">Promise&lt;void&gt;</span></div>
+        <div class="api-desc">Explicitly chunked 1-bit image. Uses RLE if more compact than raw. Progress callback: <code>(sent, total) => void</code>.</div>
+      </div>
+
+      <div class="api-item">
+        <div class="api-sig"><span class="method">sendGrayImage</span><span class="punct">(</span><span class="param">w, h, pixels, bitDepth, onProgress?</span><span class="punct">):</span> <span class="type">Promise&lt;void&gt;</span></div>
+        <div class="api-desc">Multi-frame grayscale image. <code>bitDepth</code>: 1, 2 (4 levels), or 4 (16 levels). Chooses raw or RLE automatically.</div>
+      </div>
+
+      <div class="api-item">
+        <div class="api-sig"><span class="method">sendPaletteImage</span><span class="punct">(</span><span class="param">img</span><span class="punct">:</span> <span class="type">PaletteImage</span><span class="punct">):</span> <span class="type">Promise&lt;void&gt;</span></div>
+        <div class="api-desc">Send an indexed-color image (up to 16 RGB colors) with row-run compression. Use <code>quantizeColors()</code> to prepare.</div>
+      </div>
+
+      <div class="api-item">
+        <div class="api-sig"><span class="method">sendFileTransfer</span><span class="punct">(</span><span class="param">data, fileName, onProgress?</span><span class="punct">):</span> <span class="type">Promise&lt;void&gt;</span></div>
+        <div class="api-desc">Reliable file transfer (up to 64KB) using fountain codes + DEFLATE + CRC-32. Full SYN/SYN_ACK/DATA/DONE handshake. Progress: <code>(sent, total, state) => void</code>.</div>
+      </div>
+
+      <div class="api-item">
+        <div class="api-sig"><span class="method">sendRaw</span><span class="punct">(</span><span class="param">frame</span><span class="punct">:</span> <span class="type">Uint8Array</span><span class="punct">):</span> <span class="type">Promise&lt;void&gt;</span></div>
+        <div class="api-desc">Send a pre-encoded frame (e.g., game protocol frames). No validation &mdash; you build the bytes.</div>
+      </div>
+
+      <div class="api-item">
+        <div class="api-sig"><span class="method">pauseSend</span><span class="punct">() / </span><span class="method">resumeSend</span><span class="punct">() / </span><span class="method">abortSend</span><span class="punct">()</span></div>
+        <div class="api-desc">Control multi-frame sends. Pause suspends after the current frame; resume continues; abort cancels remaining frames.</div>
+      </div>
+    </div>
+
+    <div class="api-group">
+      <div class="api-group-title">Configuration</div>
+
+      <div class="api-item">
+        <div class="api-sig"><span class="method">setProtocol</span><span class="punct">(</span><span class="param">protocol</span><span class="punct">:</span> <span class="type">SonicProtocol</span><span class="punct">):</span> <span class="type">void</span></div>
+        <div class="api-desc">Set the audio protocol. 9 variants: Audible/Ultrasound/DT800, each with Normal/Fast/Fastest speed. Higher speed = lower reliability.</div>
+      </div>
+
+      <div class="api-item">
+        <div class="api-sig"><span class="method">setVolume</span><span class="punct">(</span><span class="param">vol</span><span class="punct">:</span> <span class="type">number</span><span class="punct">):</span> <span class="type">void</span></div>
+        <div class="api-desc">Set playback volume (0-100). Higher volume improves range but may cause distortion.</div>
+      </div>
+
+      <div class="api-item">
+        <div class="api-sig"><span class="method">getFrequencyData</span><span class="punct">():</span> <span class="type">Uint8Array | null</span></div>
+        <div class="api-desc">Get real-time FFT spectrum (128 bins, 0-255 per bin). Useful for audio visualization. Returns null if not listening.</div>
+      </div>
+
+      <div class="api-item">
+        <div class="api-sig"><span class="method">generateWav</span><span class="punct">(</span><span class="param">frames</span><span class="punct">:</span> <span class="type">Uint8Array[]</span><span class="punct">):</span> <span class="type">Promise&lt;Blob&gt;</span></div>
+        <div class="api-desc">Encode frames to a WAV file blob (48kHz, 16-bit PCM) without playing them. Useful for offline generation.</div>
+      </div>
+    </div>
+
+    <div class="api-group">
+      <div class="api-group-title">Lower-Level Exports</div>
+
+      <div class="api-item">
+        <div class="api-sig"><span class="method">encodeFrame</span> / <span class="method">decodeFrame</span></div>
+        <div class="api-desc">Encode/decode QR, IMG, TXT messages to/from raw bytes. Returns typed message objects.</div>
+      </div>
+
+      <div class="api-item">
+        <div class="api-sig"><span class="method">packBits</span> / <span class="method">unpackBits</span> / <span class="method">packValues</span> / <span class="method">unpackValues</span></div>
+        <div class="api-desc">MSB-first bit packing for 1-bit booleans and N-bit values (1, 2, 4 bits per value).</div>
+      </div>
+
+      <div class="api-item">
+        <div class="api-sig"><span class="method">rleEncode</span> / <span class="method">rleDecode</span> / <span class="method">rleEncodeGray</span> / <span class="method">rleDecodeGray</span></div>
+        <div class="api-desc">Run-length encoding for 1-bit (7-bit length + color bit) and grayscale (value + length pairs).</div>
+      </div>
+
+      <div class="api-item">
+        <div class="api-sig"><span class="method">encodeBlocks</span> / <span class="type">FountainDecoder</span></div>
+        <div class="api-desc">XOR-based fountain codes. <code>encodeBlocks(data, blockSize, redundancy)</code> produces K systematic + parity blocks. Decoder reconstructs from any K received blocks.</div>
+      </div>
+
+      <div class="api-item">
+        <div class="api-sig"><span class="method">quantizeColors</span> / <span class="method">encodePaletteImage</span> / <span class="method">decodePaletteImage</span></div>
+        <div class="api-desc">Median-cut color quantization (up to 16 colors) and row-run palette encoding. Sparse colors compress to near-zero overhead.</div>
+      </div>
+
+      <div class="api-item">
+        <div class="api-sig"><span class="method">ditherImage</span><span class="punct">(</span><span class="param">luma, w, h, levels, algorithm</span><span class="punct">):</span> <span class="type">number[]</span></div>
+        <div class="api-desc">Floyd-Steinberg or Atkinson error diffusion dithering. Input: Float64Array luminance. Output: quantized pixel values.</div>
+      </div>
+
+      <div class="api-item">
+        <div class="api-sig"><span class="method">deflateCompress</span> / <span class="method">deflateDecompress</span></div>
+        <div class="api-desc">DEFLATE-raw compression via browser CompressionStream API. Falls back to passthrough in Node.js.</div>
+      </div>
+
+      <div class="api-item">
+        <div class="api-sig"><span class="method">computeCrc32</span><span class="punct">(</span><span class="param">data</span><span class="punct">:</span> <span class="type">Uint8Array</span><span class="punct">):</span> <span class="type">number</span></div>
+        <div class="api-desc">IEEE 802.3 CRC-32 with pre-computed lookup table. Used for file transfer integrity verification.</div>
+      </div>
+
+      <div class="api-item">
+        <div class="api-sig"><span class="method">waveformsToWav</span><span class="punct">(</span><span class="param">waveforms, gapMs</span><span class="punct">):</span> <span class="type">Blob</span></div>
+        <div class="api-desc">Concatenate Float32 PCM waveforms with silence gaps into a downloadable WAV file.</div>
+      </div>
+    </div>
+
+    <div class="api-group">
+      <div class="api-group-title">Game &amp; Transfer</div>
+
+      <div class="api-item">
+        <div class="api-sig"><span class="method">encodeGameFrame</span> / <span class="method">decodeGameFrame</span></div>
+        <div class="api-desc">Battleship protocol: SETUP (placement hash), SHOT (x, y), RESULT (hit/miss/sunk), WIN. 3-7 byte frames.</div>
+      </div>
+
+      <div class="api-item">
+        <div class="api-sig"><span class="method">createGameState</span> / <span class="method">placeShip</span> / <span class="method">receiveShot</span> / <span class="method">checkWin</span></div>
+        <div class="api-desc">Pure game state machine. 8&times;8 grid, 3 ships (3, 2, 2). FNV-1a hash of placement determines turn order.</div>
+      </div>
+
+      <div class="api-item">
+        <div class="api-sig"><span class="type">TransferSenderSession</span> / <span class="type">TransferReceiverSession</span></div>
+        <div class="api-desc">Full file transfer lifecycle managers. Sender: prepare &rarr; SYN &rarr; SYN_ACK &rarr; DATA burst &rarr; DONE. Receiver: SYN &rarr; SYN_ACK &rarr; collect DATA &rarr; verify CRC &rarr; DONE.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- WIRE PROTOCOL -->
+<section class="wire-section" id="wire">
+  <div class="container">
+    <div class="section-label">// specification</div>
+    <div class="section-title">Wire Protocol</div>
+    <div class="section-desc">All frames are single ggwave transmissions (max 140 bytes). Byte 0 identifies the frame type.</div>
+
+    <table class="wire-table">
+      <thead>
+        <tr><th>Type</th><th>Byte 0</th><th>Header</th><th>Payload</th><th>Max Size</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="type-name">QR</td>
+          <td class="hex">0x01</td>
+          <td>version/EC (1B) + proto ver (1B)</td>
+          <td>Bit-packed QR modules</td>
+          <td>140B</td>
+        </tr>
+        <tr>
+          <td class="type-name">IMG</td>
+          <td class="hex">0x02</td>
+          <td>width (1B) + height (1B) + proto ver (1B)</td>
+          <td>Bit-packed pixels</td>
+          <td>140B</td>
+        </tr>
+        <tr>
+          <td class="type-name">TXT</td>
+          <td class="hex">0x03</td>
+          <td>proto ver (1B)</td>
+          <td>UTF-8 text (up to 138B)</td>
+          <td>140B</td>
+        </tr>
+        <tr>
+          <td class="type-name">CHUNK</td>
+          <td class="hex">0x04</td>
+          <td>index + total + flags + dimensions</td>
+          <td>Compressed pixel data</td>
+          <td>140B/frame</td>
+        </tr>
+        <tr>
+          <td class="type-name">GAME</td>
+          <td class="hex">0x05</td>
+          <td>subtype (1B) + session fields</td>
+          <td>Setup/shot/result/win data</td>
+          <td>7B</td>
+        </tr>
+        <tr>
+          <td class="type-name">TRANSFER</td>
+          <td class="hex">0x06</td>
+          <td>subtype (1B) + session ID + fields</td>
+          <td>Fountain-coded blocks</td>
+          <td>140B/frame</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="wire-subtable">
+      <div class="wire-subtable-title">Transfer Subtypes</div>
+      <table class="wire-table">
+        <thead>
+          <tr><th>Subtype</th><th>Code</th><th>Direction</th><th>Purpose</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="type-name">SYN</td><td class="hex">0x01</td><td>Sender &rarr; Receiver</td><td>File metadata, block params, CRC-32, filename</td></tr>
+          <tr><td class="type-name">SYN_ACK</td><td class="hex">0x02</td><td>Receiver &rarr; Sender</td><td>Acknowledge, ready to receive</td></tr>
+          <tr><td class="type-name">DATA</td><td class="hex">0x03</td><td>Sender &rarr; Receiver</td><td>Fountain-coded block (index, degree, source indices, payload)</td></tr>
+          <tr><td class="type-name">DONE</td><td class="hex">0x04</td><td>Receiver &rarr; Sender</td><td>CRC verified: success or mismatch</td></tr>
+          <tr><td class="type-name">ABORT</td><td class="hex">0x05</td><td>Either</td><td>Cancel: user, timeout, or error</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="wire-subtable">
+      <div class="wire-subtable-title">Chunk Frame Layout</div>
+      <table class="wire-table">
+        <thead>
+          <tr><th>Byte</th><th>First Chunk (idx=0)</th><th>Subsequent Chunks</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="hex">0</td><td>0x04 (type)</td><td>0x04 (type)</td></tr>
+          <tr><td class="hex">1</td><td>Chunk index</td><td>Chunk index</td></tr>
+          <tr><td class="hex">2</td><td>Total chunks</td><td>Total chunks</td></tr>
+          <tr><td class="hex">3</td><td>Flags [compress:2|depth:2|reserved:4]</td><td>Flags [compress:2|depth:2|reserved:4]</td></tr>
+          <tr><td class="hex">4-5</td><td>Width (big-endian)</td><td>Proto version (1B) + payload...</td></tr>
+          <tr><td class="hex">6-7</td><td>Height (big-endian)</td><td>&mdash;</td></tr>
+          <tr><td class="hex">8</td><td>Protocol version</td><td>&mdash;</td></tr>
+          <tr><td class="hex">9-139</td><td>Payload (131B max)</td><td>Payload (135B max)</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="wire-subtable">
+      <div class="wire-subtable-title">Compression Strategies (Flags bits 7-6)</div>
+      <table class="wire-table">
+        <thead>
+          <tr><th>Value</th><th>Strategy</th><th>Best For</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="hex">00</td><td class="type-name">Raw</td><td>Random patterns, high-entropy images</td></tr>
+          <tr><td class="hex">01</td><td class="type-name">RLE (1-bit)</td><td>Solid regions, line art, sparse graphics</td></tr>
+          <tr><td class="hex">10</td><td class="type-name">RLE (gray)</td><td>Grayscale with large uniform areas</td></tr>
+          <tr><td class="hex">11</td><td class="type-name">Palette</td><td>Color images with &le;16 colors</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="wire-subtable">
+      <div class="wire-subtable-title">Game Subtypes</div>
+      <table class="wire-table">
+        <thead>
+          <tr><th>Subtype</th><th>Code</th><th>Size</th><th>Fields</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="type-name">SETUP</td><td class="hex">0x01</td><td>7B</td><td>hash (4 bytes, FNV-1a of ship placement)</td></tr>
+          <tr><td class="type-name">SHOT</td><td class="hex">0x02</td><td>5B</td><td>x, y coordinates</td></tr>
+          <tr><td class="type-name">RESULT</td><td class="hex">0x03</td><td>6B</td><td>x, y, result (0=miss, 1=hit, 2=sunk)</td></tr>
+          <tr><td class="type-name">WIN</td><td class="hex">0x04</td><td>3B</td><td>(none)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- SPECS -->
+<section class="specs-section" id="specs">
+  <div class="container">
+    <div class="section-label">// performance</div>
+    <div class="section-title">The numbers</div>
+    <div class="specs-grid">
+      <div class="spec-card">
+        <div class="spec-value">~1</div>
+        <div class="spec-unit">KB/s</div>
+        <div class="spec-label">Effective throughput<br>with compression</div>
+      </div>
+      <div class="spec-card">
+        <div class="spec-value">64</div>
+        <div class="spec-unit">KB max</div>
+        <div class="spec-label">File transfer limit<br>per session</div>
+      </div>
+      <div class="spec-card">
+        <div class="spec-value">3-5x</div>
+        <div class="spec-unit">compression</div>
+        <div class="spec-label">DEFLATE on text<br>and structured data</div>
+      </div>
+      <div class="spec-card">
+        <div class="spec-value">50%</div>
+        <div class="spec-unit">redundancy</div>
+        <div class="spec-label">Fountain code parity<br>for loss tolerance</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- SCIENCE -->
+<section class="science-section" id="science">
+  <div class="container">
+    <div class="section-label">// how it works</div>
+    <div class="section-title">The science</div>
+    <div class="section-desc">Every layer uses real signal processing and information theory. Here's what's happening when you hear the chirps.</div>
+    <div class="science-grid">
+      <div class="science-card">
+        <h3>FSK Modulation</h3>
+        <p>Powered by <a href="https://github.com/ggerganov/ggwave" style="color:var(--green);text-decoration:none">ggwave</a>. Frequency-Shift Keying maps each byte to a specific audio frequency. The receiver uses FFT (Fast Fourier Transform) to decompose the audio back into frequency components and read the data. Like a musical barcode.</p>
+        <div class="formula">byte &rarr; frequency(byte) &rarr; FFT &rarr; byte</div>
+      </div>
+      <div class="science-card">
+        <h3>Fountain Codes</h3>
+        <p>Rateless erasure codes that let the receiver reconstruct data from <em>any</em> sufficient subset of encoded blocks. Each parity block XORs 2&ndash;3 source blocks. If a block is lost, it can be recovered from the parity without retransmission.</p>
+        <div class="formula">parity = src[i] XOR src[j] XOR src[k]</div>
+      </div>
+      <div class="science-card">
+        <h3>Error Diffusion</h3>
+        <p>Floyd-Steinberg dithering distributes quantization error to neighboring pixels, creating the illusion of more gray levels than actually exist. Your eye averages nearby pixels, perceiving smooth gradients from binary dots.</p>
+        <div class="formula">error = old_pixel - quantized_pixel<br>neighbors += error * weights</div>
+      </div>
+      <div class="science-card">
+        <h3>Median Cut</h3>
+        <p>Color quantization finds the N most representative colors by recursively splitting the color space along its widest axis. Each pixel is then mapped to the nearest palette entry, with row-run compression for efficient encoding.</p>
+        <div class="formula">split(colors, widest_channel) &rarr; palette[16]</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- CTA -->
+<section class="cta-section">
+  <div class="container">
+    <div class="section-label">// get started</div>
+    <div class="section-title">Start transmitting</div>
+    <div class="section-desc">Open the app on two devices. Hit listen on one, send on the other. Watch data travel through the air.</div>
+    <div class="hero-actions">
+      <a href="./app.html" class="btn btn-primary">Launch App</a>
+      <a href="https://github.com/0xNtive/wavepx" class="btn">View Source</a>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="container">
+    <div class="inner">
+      <span class="logo">WAVEPX</span>
+      <ul class="footer-links">
+        <li><a href="https://github.com/0xNtive/wavepx">GitHub</a></li>
+        <li><a href="https://www.npmjs.com/package/wavepx">npm</a></li>
+        <li><a href="./app.html">App</a></li>
+        <li style="color:var(--text-faint)">Built on <a href="https://github.com/ggerganov/ggwave">ggwave</a> by <a href="https://github.com/ggerganov">Georgi Gerganov</a></li>
+      </ul>
+    </div>
+  </div>
+</footer>
+
+<script>
+// Generate hero grid cells
+const grid = document.getElementById('heroGrid');
+for (let i = 0; i < 32 * 18; i++) {
+  const cell = document.createElement('div');
+  cell.className = 'cell';
+  grid.appendChild(cell);
+}
+
+// Code tabs
+function showTab(name, e) {
+  document.querySelectorAll('.code-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.code-block').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  e.target.classList.add('active');
+}
+</script>
 </body>
 </html>

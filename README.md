@@ -4,7 +4,7 @@ Transmit files, images, and data between devices using sound.
 
 An application framework built on top of [ggwave](https://github.com/ggerganov/ggwave) by [Georgi Gerganov](https://github.com/ggerganov). ggwave provides the brilliant data-over-sound foundation — FSK modulation, FFT decoding, and 9 audio protocols across audible, ultrasound, and dual-tone frequency bands. wavepx adds the application layer on top: multi-frame chunking, fountain codes for reliable delivery, DEFLATE compression, palette quantization, dithering, and full protocols for file transfer, image transmission, QR codes, and games — all over audio.
 
-[Documentation & API Reference](./app/landing.html) &#8226; [npm](https://www.npmjs.com/package/wavepx)
+[Documentation & API Reference](./app/index.html) &#8226; [npm](https://www.npmjs.com/package/wavepx)
 
 ## Quick start
 
