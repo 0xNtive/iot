@@ -447,6 +447,11 @@ export class SonicPixel {
     return this.state;
   }
 
+  /** Get real-time frequency spectrum for visualization (128 bins, 0-255 each). */
+  getFrequencyData(): Uint8Array | null {
+    return this.audio.getFrequencyData();
+  }
+
   destroy(): void {
     this.stopListening();
     this.transport.destroy();

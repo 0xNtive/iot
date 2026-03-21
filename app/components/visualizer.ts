@@ -1,24 +1,23 @@
 /**
- * Animated audio visualizer — shows bouncing bars for audio level and sending state.
- * Pauses animation when idle to save CPU/battery.
+ * Real-time audio spectrum visualizer using FFT frequency data.
+ * Shows actual frequency content as an equalizer, not random bars.
+ * Pauses when idle to save CPU.
  */
 const NUM_BARS = 16;
 const BAR_GAP = 2;
-const DECAY = 0.85;
-const SEND_PULSE_SPEED = 0.15;
 const IDLE_TIMEOUT = 500;
+const SMOOTHING = 0.3;
 
 export class Visualizer {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private bars: number[] = new Array(NUM_BARS).fill(0);
-  private targetLevel = 0;
   private sending = false;
-  private sendPhase = 0;
   private chunkProgress = 0;
   private animId = 0;
   private running = false;
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
+  private getSpectrum: (() => Uint8Array | null) | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -26,14 +25,18 @@ export class Visualizer {
     this.drawBaseline();
   }
 
-  setAudioLevel(level: number): void {
-    this.targetLevel = Math.min(1, level * 40);
-    if (this.targetLevel > 0.01) this.ensureRunning();
+  /** Set the function that provides real-time frequency data. */
+  setSpectrumSource(fn: () => Uint8Array | null): void {
+    this.getSpectrum = fn;
+  }
+
+  /** Called when audio level changes — just ensures the loop is running. */
+  setAudioLevel(_level: number): void {
+    this.ensureRunning();
   }
 
   setSending(sending: boolean): void {
     this.sending = sending;
-    if (!sending) this.sendPhase = 0;
     if (sending) this.ensureRunning();
   }
 
@@ -56,15 +59,6 @@ export class Visualizer {
     const animate = () => {
       if (!this.running) return;
       this.draw();
-
-      // Check if idle: not sending and all bars near zero
-      if (!this.sending && this.targetLevel < 0.01) {
-        const maxBar = Math.max(...this.bars);
-        if (maxBar < 0.02) {
-          this.scheduleStop();
-        }
-      }
-
       this.animId = requestAnimationFrame(animate);
     };
     animate();
@@ -79,10 +73,13 @@ export class Visualizer {
     if (this.idleTimer) return;
     this.idleTimer = setTimeout(() => {
       this.idleTimer = null;
-      if (!this.sending && this.targetLevel < 0.01) {
-        this.stop();
-        this.bars.fill(0);
-        this.drawBaseline();
+      if (!this.sending) {
+        const maxBar = Math.max(...this.bars);
+        if (maxBar < 0.02) {
+          this.stop();
+          this.bars.fill(0);
+          this.drawBaseline();
+        }
       }
     }, IDLE_TIMEOUT);
   }
@@ -102,21 +99,40 @@ export class Visualizer {
 
     this.ctx.clearRect(0, 0, w, h);
 
-    if (this.sending) {
-      this.sendPhase += SEND_PULSE_SPEED;
+    // Get real frequency data if available
+    const spectrum = this.getSpectrum?.();
+    if (spectrum && spectrum.length > 0) {
+      // Map frequency bins to bars (logarithmic-ish grouping for perceptual balance)
+      const binCount = spectrum.length; // typically 128
       for (let i = 0; i < NUM_BARS; i++) {
-        const wave = Math.sin(this.sendPhase + i * 0.4) * 0.5 + 0.5;
-        const target = wave * 0.6 + 0.2;
-        this.bars[i] += (target - this.bars[i]) * 0.3;
+        // Use logarithmic distribution: lower bars = fewer bins, higher bars = more bins
+        const startFrac = Math.pow(i / NUM_BARS, 1.5);
+        const endFrac = Math.pow((i + 1) / NUM_BARS, 1.5);
+        const startBin = Math.floor(startFrac * binCount);
+        const endBin = Math.max(startBin + 1, Math.floor(endFrac * binCount));
+
+        let sum = 0;
+        for (let b = startBin; b < endBin && b < binCount; b++) {
+          sum += spectrum[b];
+        }
+        const avg = sum / (endBin - startBin) / 255; // normalize to 0-1
+        // Smooth transition
+        this.bars[i] += (avg - this.bars[i]) * SMOOTHING;
       }
     } else {
+      // No spectrum — decay to zero
       for (let i = 0; i < NUM_BARS; i++) {
-        const jitter = Math.random() * this.targetLevel * 0.5;
-        const target = this.targetLevel * (0.5 + jitter);
-        this.bars[i] = Math.max(this.bars[i] * DECAY, target);
+        this.bars[i] *= 0.85;
       }
     }
 
+    // Check if idle
+    const maxBar = Math.max(...this.bars);
+    if (!this.sending && maxBar < 0.01) {
+      this.scheduleStop();
+    }
+
+    // Draw bars
     for (let i = 0; i < NUM_BARS; i++) {
       const barH = Math.max(2, this.bars[i] * h);
       const x = i * (barW + BAR_GAP);
@@ -125,12 +141,17 @@ export class Visualizer {
       if (this.sending) {
         const chunkPos = i / NUM_BARS;
         this.ctx.fillStyle = chunkPos <= this.chunkProgress ? '#00ff88' : '#00aa55';
-      } else if (this.bars[i] > 0.6) {
-        this.ctx.fillStyle = '#00ff88';
-      } else if (this.bars[i] > 0.3) {
-        this.ctx.fillStyle = '#00cc66';
       } else {
-        this.ctx.fillStyle = '#00aa55';
+        // Color by intensity
+        if (this.bars[i] > 0.7) {
+          this.ctx.fillStyle = '#00ff88';
+        } else if (this.bars[i] > 0.4) {
+          this.ctx.fillStyle = '#00cc66';
+        } else if (this.bars[i] > 0.15) {
+          this.ctx.fillStyle = '#00aa55';
+        } else {
+          this.ctx.fillStyle = '#007744';
+        }
       }
 
       const radius = Math.min(barW / 2, 2);
@@ -144,6 +165,7 @@ export class Visualizer {
       this.ctx.fill();
     }
 
+    // Baseline
     this.ctx.fillStyle = '#2a2a3a';
     this.ctx.fillRect(0, h - 1, w, 1);
   }

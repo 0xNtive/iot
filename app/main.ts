@@ -265,6 +265,9 @@ async function initSonic(): Promise<void> {
 
   await sp.init();
   sonic = sp;
+
+  // Connect real-time spectrum to visualizer
+  statusBar.setSpectrumSource(() => sonic?.getFrequencyData() ?? null);
 }
 
 async function toggleListening(): Promise<void> {

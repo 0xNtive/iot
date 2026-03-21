@@ -18,6 +18,8 @@ registerProcessor('wavepx-capture', CaptureProcessor);
 
 export class AudioManager {
   private audioCtx: AudioContext | null = null;
+  private analyser: AnalyserNode | null = null;
+  private frequencyData: Uint8Array | null = null;
   private stream: MediaStream | null = null;
   private sourceNode: MediaStreamAudioSourceNode | null = null;
   private captureNode: AudioWorkletNode | ScriptProcessorNode | null = null;
@@ -35,6 +37,13 @@ export class AudioManager {
       await this.audioCtx.resume();
     }
 
+    // AnalyserNode for real-time frequency visualization
+    this.analyser = this.audioCtx.createAnalyser();
+    this.analyser.fftSize = 256; // 128 frequency bins
+    this.analyser.smoothingTimeConstant = 0.7;
+    this.analyser.connect(this.audioCtx.destination);
+    this.frequencyData = new Uint8Array(this.analyser.frequencyBinCount);
+
     // Try to register AudioWorklet processor
     if (this.audioCtx.audioWorklet) {
       try {
@@ -47,6 +56,13 @@ export class AudioManager {
         this.useWorklet = false;
       }
     }
+  }
+
+  /** Get current frequency spectrum data (0-255 per bin, 128 bins). */
+  getFrequencyData(): Uint8Array | null {
+    if (!this.analyser || !this.frequencyData) return null;
+    this.analyser.getByteFrequencyData(this.frequencyData);
+    return this.frequencyData;
   }
 
   async startCapture(
@@ -96,7 +112,7 @@ export class AudioManager {
         }
       };
       this.sourceNode.connect(worklet);
-      worklet.connect(this.audioCtx.destination);
+      worklet.connect(this.analyser ?? this.audioCtx.destination);
       this.captureNode = worklet;
     } else {
       // Fallback to deprecated ScriptProcessorNode
@@ -105,7 +121,7 @@ export class AudioManager {
         this.handleSamples(new Float32Array(e.inputBuffer.getChannelData(0)));
       };
       this.sourceNode.connect(processor);
-      processor.connect(this.audioCtx.destination);
+      processor.connect(this.analyser ?? this.audioCtx.destination);
       this.captureNode = processor;
     }
   }
@@ -154,7 +170,7 @@ export class AudioManager {
 
     const source = this.audioCtx.createBufferSource();
     source.buffer = buffer;
-    source.connect(this.audioCtx.destination);
+    source.connect(this.analyser ?? this.audioCtx.destination);
 
     return new Promise<void>((resolve, reject) => {
       this.playingSource = source;

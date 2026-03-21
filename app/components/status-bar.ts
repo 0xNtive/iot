@@ -20,6 +20,11 @@ export class StatusBar {
     this.visualizer = new Visualizer(canvas);
   }
 
+  /** Connect the visualizer to a real-time spectrum source. */
+  setSpectrumSource(fn: () => Uint8Array | null): void {
+    this.visualizer.setSpectrumSource(fn);
+  }
+
   setState(state: SonicState): void {
     const labels: Record<SonicState, string> = {
       [SonicState.Idle]: 'Idle',
