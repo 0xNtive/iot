@@ -150,13 +150,13 @@ export class FountainDecoder {
   private processBlock(block: EncodedBlock): void {
     // XOR out any already-decoded source blocks
     let unknownIndices: number[] = [];
-    let payload = new Uint8Array(block.payload);
+    let payload: Uint8Array = Uint8Array.from(block.payload);
 
     for (const srcIdx of block.sourceIndices) {
       if (srcIdx >= this.k) continue;
       if (this.decoded[srcIdx]) {
         // XOR out the known block
-        payload = xorWith(payload, this.decoded[srcIdx]!, this.blockSize);
+        payload = xorWith(payload, this.decoded[srcIdx]!, this.blockSize) as Uint8Array;
       } else {
         unknownIndices.push(srcIdx);
       }
@@ -193,12 +193,12 @@ export class FountainDecoder {
       const remaining: EncodedBlock[] = [];
 
       for (const pending of this.pending) {
-        let pPayload = new Uint8Array(pending.payload);
+        let pPayload: Uint8Array = Uint8Array.from(pending.payload);
         const unknown: number[] = [];
 
         for (const srcIdx of pending.sourceIndices) {
           if (this.decoded[srcIdx]) {
-            pPayload = xorWith(pPayload, this.decoded[srcIdx]!, this.blockSize);
+            pPayload = xorWith(pPayload, this.decoded[srcIdx]!, this.blockSize) as Uint8Array;
           } else {
             unknown.push(srcIdx);
           }

@@ -174,7 +174,7 @@ export class TransferPanel {
         const file = this.receiverSession.getFile();
         if (file) {
           this.recvText.textContent = `Received ${file.name} (${formatBytes(file.data.length)})`;
-          const blob = new Blob([file.data]);
+          const blob = new Blob([file.data as BlobPart]);
           const url = URL.createObjectURL(blob);
           this.downloadLink.href = url;
           this.downloadLink.download = file.name;

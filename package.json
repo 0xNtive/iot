@@ -1,7 +1,7 @@
 {
   "name": "wavepx",
   "version": "0.1.0",
-  "description": "Transmit QR codes & pixel art over sound",
+  "description": "Transmit files, images & data over sound — fountain codes, deflate compression, battleship over audio",
   "type": "module",
   "main": "dist/lib/index.js",
   "types": "dist/lib/index.d.ts",
@@ -11,27 +11,44 @@
       "types": "./dist/lib/index.d.ts"
     }
   },
+  "bin": {
+    "wavepx": "bin/wavepx.mjs"
+  },
   "files": [
-    "dist/lib"
+    "dist/lib",
+    "dist/app",
+    "bin"
   ],
   "scripts": {
     "dev": "vite --config vite.config.app.ts",
     "build:lib": "vite build --config vite.config.lib.ts && tsc --emitDeclarationOnly --outDir dist/lib",
     "build:app": "vite build --config vite.config.app.ts",
     "build": "npm run build:lib && npm run build:app",
+    "prepublishOnly": "npm run build",
     "test": "vitest run",
     "test:watch": "vitest",
-    "preview": "vite preview --config vite.config.app.ts"
+    "preview": "vite preview --config vite.config.app.ts",
+    "start": "node bin/wavepx.mjs"
   },
   "keywords": [
     "ggwave",
+    "data-over-sound",
+    "audio",
+    "file-transfer",
+    "fountain-codes",
     "qr-code",
     "pixel-art",
-    "data-over-sound",
+    "compression",
+    "battleship",
     "sonic",
-    "audio"
+    "iot"
   ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/0xNtive/iot.git"
+  },
+  "homepage": "https://github.com/0xNtive/iot#readme",
   "devDependencies": {
     "typescript": "^5.7.0",
     "vite": "^6.0.0",

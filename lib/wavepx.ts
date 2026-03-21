@@ -299,11 +299,11 @@ export class SonicPixel {
 
     this.setState(SonicState.Sending);
     this.sendAborted = false;
+    const onTransfer = this.config.onTransferMessage;
 
     try {
       // Send SYN and wait for SYN_ACK
       let synAckReceived = false;
-      const onTransfer = this.config.onTransferMessage;
 
       const synAckHandler = (msg: import('./transfer-protocol.js').TransferMessage) => {
         if (msg.subtype === 0x02 /* SYN_ACK */ && session.onSynAck(msg as any)) {
