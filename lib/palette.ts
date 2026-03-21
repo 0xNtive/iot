@@ -244,12 +244,15 @@ export function encodePaletteImage(img: PaletteImage): Uint8Array {
 /**
  * @param fillValue - Default index for unpainted pixels. Use -1 for partial
  *   decodes (progressive rendering) so unpainted areas show as distinct.
+ * @param completeOnly - If true, only paint colors whose full block data
+ *   is available. Gives the "color by color" progressive effect.
  */
 export function decodePaletteImage(
   data: Uint8Array,
   width: number,
   height: number,
   fillValue = 0,
+  completeOnly = false,
 ): { palette: RGB[]; indices: number[] } {
   let offset = 0;
 
@@ -268,6 +271,11 @@ export function decodePaletteImage(
   for (let colorIdx = 0; colorIdx < numColors && offset + 1 < data.length; colorIdx++) {
     const blockLen = (data[offset] << 8) | data[offset + 1];
     offset += 2;
+
+    // In completeOnly mode, skip this color if we don't have the full block
+    if (completeOnly && offset + blockLen > data.length) {
+      break; // all remaining colors are incomplete too
+    }
 
     const blockEnd = Math.min(offset + blockLen, data.length);
     while (offset < blockEnd) {

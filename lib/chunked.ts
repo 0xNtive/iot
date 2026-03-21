@@ -268,8 +268,9 @@ export class ChunkAssembler {
       case Compression.RLEGray:
         return { pixels: rleDecodeGray(combined, totalPixels) };
       case Compression.Palette: {
-        // Use -1 fill for partial decodes so unpainted pixels render as dark
-        const result = decodePaletteImage(combined, this.width, this.height, partial ? -1 : 0);
+        // Partial: fill=-1 (dark bg), completeOnly=true (whole colors appear at once)
+        // Final: fill=0 (default bg), completeOnly=false (decode everything)
+        const result = decodePaletteImage(combined, this.width, this.height, partial ? -1 : 0, partial);
         return { pixels: result.indices, palette: result.palette };
       }
       case Compression.Raw:
