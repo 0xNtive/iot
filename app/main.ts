@@ -95,12 +95,11 @@ function updateChunkInfo(): void {
 }
 
 /** Get the active pixel canvas (draw or image tab). */
-function getActivePixelCanvas(): { canvas: PixelCanvas; mode: 'bw' | 'gray4' | 'gray16' | 'color16'; usePalette: boolean } {
+function getActivePixelCanvas(): { canvas: PixelCanvas; usePalette: boolean } {
   if (activeTab === 'image') {
-    const usePalette = imagePanel.getEncoding() === 'palette' || imagePanel.getColorMode() === 'color16';
-    return { canvas: imagePanel.getPixelCanvas(), mode: imagePanel.getColorMode(), usePalette };
+    return { canvas: imagePanel.getPixelCanvas(), usePalette: imagePanel.getEncoding() === 'palette' };
   }
-  return { canvas: pixelCanvas, mode: colorMode, usePalette: false };
+  return { canvas: pixelCanvas, usePalette: false };
 }
 
 /** Get the current frames to send (for download or send). */
