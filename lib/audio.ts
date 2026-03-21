@@ -1,11 +1,27 @@
 const SAMPLE_RATE = 48000;
 const BUFFER_SIZE = 1024;
 
+// Inline AudioWorklet processor — runs on audio thread, sends samples to main thread
+const WORKLET_CODE = `
+class CaptureProcessor extends AudioWorkletProcessor {
+  process(inputs) {
+    const input = inputs[0];
+    if (input && input[0] && input[0].length > 0) {
+      const copy = new Float32Array(input[0]);
+      this.port.postMessage(copy, [copy.buffer]);
+    }
+    return true;
+  }
+}
+registerProcessor('wavepx-capture', CaptureProcessor);
+`;
+
 export class AudioManager {
   private audioCtx: AudioContext | null = null;
   private stream: MediaStream | null = null;
   private sourceNode: MediaStreamAudioSourceNode | null = null;
-  private processorNode: ScriptProcessorNode | null = null;
+  private captureNode: AudioWorkletNode | ScriptProcessorNode | null = null;
+  private useWorklet = false;
   private onAudioData: ((samples: Float32Array) => void) | null = null;
   private onAudioLevel: ((level: number) => void) | null = null;
 
@@ -13,6 +29,19 @@ export class AudioManager {
     this.audioCtx = new AudioContext({ sampleRate: SAMPLE_RATE });
     if (this.audioCtx.state === 'suspended') {
       await this.audioCtx.resume();
+    }
+
+    // Try to register AudioWorklet processor
+    if (this.audioCtx.audioWorklet) {
+      try {
+        const blob = new Blob([WORKLET_CODE], { type: 'application/javascript' });
+        const url = URL.createObjectURL(blob);
+        await this.audioCtx.audioWorklet.addModule(url);
+        URL.revokeObjectURL(url);
+        this.useWorklet = true;
+      } catch {
+        this.useWorklet = false;
+      }
     }
   }
 
@@ -36,33 +65,34 @@ export class AudioManager {
     });
 
     this.sourceNode = this.audioCtx.createMediaStreamSource(this.stream);
-    this.processorNode = this.audioCtx.createScriptProcessor(BUFFER_SIZE, 1, 1);
 
-    this.processorNode.onaudioprocess = (e: AudioProcessingEvent) => {
-      const input = e.inputBuffer.getChannelData(0);
-      const samples = new Float32Array(input);
-
-      if (this.onAudioLevel) {
-        let sum = 0;
-        for (let i = 0; i < samples.length; i++) {
-          sum += Math.abs(samples[i]);
-        }
-        this.onAudioLevel(sum / samples.length);
-      }
-
-      if (this.onAudioData) {
-        this.onAudioData(samples);
-      }
-    };
-
-    this.sourceNode.connect(this.processorNode);
-    this.processorNode.connect(this.audioCtx.destination);
+    if (this.useWorklet) {
+      const worklet = new AudioWorkletNode(this.audioCtx, 'wavepx-capture');
+      worklet.port.onmessage = (e: MessageEvent) => {
+        this.handleSamples(e.data as Float32Array);
+      };
+      this.sourceNode.connect(worklet);
+      worklet.connect(this.audioCtx.destination);
+      this.captureNode = worklet;
+    } else {
+      // Fallback to deprecated ScriptProcessorNode
+      const processor = this.audioCtx.createScriptProcessor(BUFFER_SIZE, 1, 1);
+      processor.onaudioprocess = (e: AudioProcessingEvent) => {
+        this.handleSamples(new Float32Array(e.inputBuffer.getChannelData(0)));
+      };
+      this.sourceNode.connect(processor);
+      processor.connect(this.audioCtx.destination);
+      this.captureNode = processor;
+    }
   }
 
   stopCapture(): void {
-    if (this.processorNode) {
-      this.processorNode.disconnect();
-      this.processorNode = null;
+    if (this.captureNode) {
+      this.captureNode.disconnect();
+      if (this.captureNode instanceof AudioWorkletNode) {
+        this.captureNode.port.onmessage = null;
+      }
+      this.captureNode = null;
     }
     if (this.sourceNode) {
       this.sourceNode.disconnect();
@@ -111,6 +141,19 @@ export class AudioManager {
     if (this.audioCtx) {
       this.audioCtx.close();
       this.audioCtx = null;
+    }
+  }
+
+  private handleSamples(samples: Float32Array): void {
+    if (this.onAudioLevel) {
+      let sum = 0;
+      for (let i = 0; i < samples.length; i++) {
+        sum += Math.abs(samples[i]);
+      }
+      this.onAudioLevel(sum / samples.length);
+    }
+    if (this.onAudioData) {
+      this.onAudioData(samples);
     }
   }
 }
