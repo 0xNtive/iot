@@ -225,24 +225,24 @@ export class ChunkAssembler {
     this.chunks.set(chunk.index, chunk.payload);
 
     if (this.width > 0 && this.height > 0) {
-      const partial = this.assemblePartial();
+      const partialResult = this.assemblePartial(true);
       const progress = this.chunks.size / this.total;
-      this.onProgress?.(partial.pixels, this.width, this.height, this.bitDepth, progress, partial.palette);
+      this.onProgress?.(partialResult.pixels, this.width, this.height, this.bitDepth, progress, partialResult.palette);
     }
 
     if (this.chunks.size === this.total) {
-      const result = this.assemblePartial();
+      const finalResult = this.assemblePartial(false);
       return {
         width: this.width, height: this.height,
-        pixels: result.pixels, bitDepth: this.bitDepth,
-        palette: result.palette,
+        pixels: finalResult.pixels, bitDepth: this.bitDepth,
+        palette: finalResult.palette,
       };
     }
 
     return null;
   }
 
-  private assemblePartial(): { pixels: number[]; palette?: RGB[] } {
+  private assemblePartial(partial = true): { pixels: number[]; palette?: RGB[] } {
     const parts: Uint8Array[] = [];
     let totalLen = 0;
     for (let i = 0; i < this.total; i++) {
@@ -268,7 +268,8 @@ export class ChunkAssembler {
       case Compression.RLEGray:
         return { pixels: rleDecodeGray(combined, totalPixels) };
       case Compression.Palette: {
-        const result = decodePaletteImage(combined, this.width, this.height);
+        // Use -1 fill for partial decodes so unpainted pixels render as dark
+        const result = decodePaletteImage(combined, this.width, this.height, partial ? -1 : 0);
         return { pixels: result.indices, palette: result.palette };
       }
       case Compression.Raw:

@@ -241,10 +241,15 @@ export function encodePaletteImage(img: PaletteImage): Uint8Array {
 /**
  * Decode palette row-run data into a pixel array of RGB values.
  */
+/**
+ * @param fillValue - Default index for unpainted pixels. Use -1 for partial
+ *   decodes (progressive rendering) so unpainted areas show as distinct.
+ */
 export function decodePaletteImage(
   data: Uint8Array,
   width: number,
   height: number,
+  fillValue = 0,
 ): { palette: RGB[]; indices: number[] } {
   let offset = 0;
 
@@ -258,8 +263,7 @@ export function decodePaletteImage(
     });
   }
 
-  // Start with all pixels as color 0 (most frequent = background)
-  const indices = new Array(width * height).fill(0);
+  const indices = new Array(width * height).fill(fillValue);
 
   for (let colorIdx = 0; colorIdx < numColors && offset + 1 < data.length; colorIdx++) {
     const blockLen = (data[offset] << 8) | data[offset + 1];
