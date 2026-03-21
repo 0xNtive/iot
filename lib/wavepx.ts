@@ -122,12 +122,21 @@ export class SonicPixel {
     if (wasListening) this.stopListening();
 
     this.setState(SonicState.Sending);
+    this.sendAborted = false;
     try {
       const frame = encodeFrame(msg);
       const samples = this.transport.encode(frame, this.protocol, this.volume);
-      await this.audio.play(samples);
-      await new Promise((r) => setTimeout(r, SEND_SILENCE_BUFFER_MS));
+      try {
+        await this.audio.play(samples);
+      } catch {
+        if (this.sendAborted) return;
+        throw new Error('Playback failed');
+      }
+      if (!this.sendAborted) {
+        await new Promise((r) => setTimeout(r, SEND_SILENCE_BUFFER_MS));
+      }
     } finally {
+      this.sendAborted = false;
       this.setState(SonicState.Idle);
       if (wasListening) await this.startListening();
     }
@@ -188,7 +197,12 @@ export class SonicPixel {
         if (this.sendAborted) break;
 
         const samples = this.transport.encode(chunks[i], turboProto, this.volume);
-        await this.audio.play(samples);
+        try {
+          await this.audio.play(samples);
+        } catch {
+          if (this.sendAborted) break; // stopPlayback() was called
+          throw new Error('Playback failed');
+        }
         onProgress?.(i + 1, chunks.length);
 
         if (i < chunks.length - 1) {
@@ -206,6 +220,8 @@ export class SonicPixel {
 
   abortSend(): void {
     this.sendAborted = true;
+    // Stop currently playing audio immediately
+    this.audio.stopPlayback();
     // Also unpause if paused, so the loop exits
     if (this.pauseResolve) {
       this.pauseResolve();
@@ -247,8 +263,15 @@ export class SonicPixel {
     this.setState(SonicState.Sending);
     try {
       const samples = this.transport.encode(frame, this.protocol, this.volume);
-      await this.audio.play(samples);
-      await new Promise((r) => setTimeout(r, SEND_SILENCE_BUFFER_MS));
+      try {
+        await this.audio.play(samples);
+      } catch {
+        if (this.sendAborted) return;
+        throw new Error('Playback failed');
+      }
+      if (!this.sendAborted) {
+        await new Promise((r) => setTimeout(r, SEND_SILENCE_BUFFER_MS));
+      }
     } finally {
       this.setState(SonicState.Idle);
       if (wasListening) await this.startListening();

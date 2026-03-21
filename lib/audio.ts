@@ -26,6 +26,8 @@ export class AudioManager {
   private onAudioLevel: ((level: number) => void) | null = null;
   private sampleBuffer: Float32Array | null = null;
   private sampleOffset = 0;
+  private playingSource: AudioBufferSourceNode | null = null;
+  private playReject: (() => void) | null = null;
 
   async init(): Promise<void> {
     this.audioCtx = new AudioContext({ sampleRate: SAMPLE_RATE });
@@ -154,10 +156,28 @@ export class AudioManager {
     source.buffer = buffer;
     source.connect(this.audioCtx.destination);
 
-    return new Promise<void>((resolve) => {
-      source.onended = () => resolve();
+    return new Promise<void>((resolve, reject) => {
+      this.playingSource = source;
+      this.playReject = () => reject(new Error('Playback aborted'));
+      source.onended = () => {
+        this.playingSource = null;
+        this.playReject = null;
+        resolve();
+      };
       source.start();
     });
+  }
+
+  /** Stop currently playing audio immediately. */
+  stopPlayback(): void {
+    if (this.playingSource) {
+      try { this.playingSource.stop(); } catch { /* already stopped */ }
+      this.playingSource = null;
+    }
+    if (this.playReject) {
+      this.playReject();
+      this.playReject = null;
+    }
   }
 
   destroy(): void {
