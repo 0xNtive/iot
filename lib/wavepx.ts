@@ -128,7 +128,6 @@ export class SonicPixel {
     this.sendAborted = false;
     try {
       const frame = encodeFrame(msg);
-      this.dispatchFrame(frame); // loopback: sender sees own content
       const samples = this.transport.encode(frame, this.protocol, this.volume);
       try {
         await this.audio.play(samples);
@@ -136,6 +135,7 @@ export class SonicPixel {
         if (this.sendAborted) return;
         throw new Error('Playback failed');
       }
+      this.dispatchFrame(frame); // loopback after audio completes
       if (!this.sendAborted) {
         await new Promise((r) => setTimeout(r, SEND_SILENCE_BUFFER_MS));
       }
@@ -200,14 +200,14 @@ export class SonicPixel {
         }
         if (this.sendAborted) break;
 
-        this.dispatchFrame(chunks[i]); // loopback: progressive rendering
         const samples = this.transport.encode(chunks[i], turboProto, this.volume);
         try {
           await this.audio.play(samples);
         } catch {
-          if (this.sendAborted) break; // stopPlayback() was called
+          if (this.sendAborted) break;
           throw new Error('Playback failed');
         }
+        this.dispatchFrame(chunks[i]); // loopback after each chunk plays
         onProgress?.(i + 1, chunks.length);
 
         if (i < chunks.length - 1) {
@@ -267,7 +267,6 @@ export class SonicPixel {
 
     this.setState(SonicState.Sending);
     try {
-      this.dispatchFrame(frame); // loopback
       const samples = this.transport.encode(frame, this.protocol, this.volume);
       try {
         await this.audio.play(samples);
@@ -275,6 +274,7 @@ export class SonicPixel {
         if (this.sendAborted) return;
         throw new Error('Playback failed');
       }
+      this.dispatchFrame(frame); // loopback after audio completes
       if (!this.sendAborted) {
         await new Promise((r) => setTimeout(r, SEND_SILENCE_BUFFER_MS));
       }
