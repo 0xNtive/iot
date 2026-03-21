@@ -1006,7 +1006,7 @@ footer .footer-links a:hover { color: var(--green); }
     <div class="hero-actions">
       <a href="./index.html" class="btn btn-primary">Launch App</a>
       <a href="#code" class="btn btn-install">npm install wavepx</a>
-      <a href="https://github.com/0xNtive/iot" class="btn">GitHub</a>
+      <a href="https://github.com/0xNtive/wavepx" class="btn">GitHub</a>
     </div>
   </div>
 </section>
@@ -1017,7 +1017,7 @@ footer .footer-links a:hover { color: var(--green); }
 <section class="what-section" id="about">
   <div class="container">
     <div class="section-label">// about</div>
-    <div class="section-title">Not a wrapper.<br>A protocol stack.</div>
+    <div class="section-title">Built on ggwave.<br>An application framework on top.</div>
     <div class="what-grid">
       <div class="what-visual">
         <div class="ring"></div>
@@ -1027,22 +1027,25 @@ footer .footer-links a:hover { color: var(--green); }
         <div class="center-icon">~</div>
       </div>
       <div class="what-text">
-        <h3>ggwave gives you tones.<br>WAVEPX gives you a platform.</h3>
+        <h3>Powered by <a href="https://github.com/ggerganov/ggwave" style="color:var(--green);text-decoration:none;border-bottom:1px solid var(--green-dark)">ggwave</a></h3>
         <p>
-          <strong>ggwave</strong> is an excellent FSK modem &mdash; it turns bytes into sound and back.
-          But it maxes out at <strong>140 bytes per frame</strong>, has no error recovery,
-          no compression, and no protocol for structured data.
+          <strong><a href="https://github.com/ggerganov/ggwave" style="color:var(--green);text-decoration:none">ggwave</a></strong>
+          by <a href="https://github.com/ggerganov" style="color:var(--cyan);text-decoration:none">Georgi Gerganov</a>
+          is a brilliant data-over-sound library that handles the hardest part &mdash;
+          turning bytes into precisely tuned audio tones and decoding them back using FSK modulation and FFT.
+          It supports 9 protocols across audible, ultrasound, and dual-tone frequency bands.
+          It&rsquo;s the foundation that makes everything here possible.
         </p>
         <p>
-          <strong>WAVEPX</strong> builds the full stack on top: multi-frame chunked images with
-          progressive rendering, DEFLATE compression for 3&ndash;5x throughput on text,
-          fountain codes that survive packet loss without retransmission,
-          palette quantization, dithering, and application protocols for games and file transfer.
+          <strong>WAVEPX</strong> is an application framework layer on top of ggwave.
+          It adds multi-frame chunked images with progressive rendering,
+          DEFLATE compression for higher throughput, fountain codes for reliable delivery,
+          palette quantization, dithering, and full application protocols for file transfer and games.
         </p>
         <div class="not-just">
           <strong>Think of it this way:</strong>
-          ggwave is the physical layer. WAVEPX is TCP/IP, HTTP, and the application &mdash;
-          everything from reliable delivery to the user interface.
+          ggwave is the brilliant physical layer that turns data into sound.
+          WAVEPX adds the application stack on top &mdash; chunking, compression, error recovery, and the UI.
         </div>
       </div>
     </div>
@@ -1143,7 +1146,7 @@ footer .footer-links a:hover { color: var(--green); }
       </div>
       <div class="arch-layer">
         <div class="arch-label">Transport</div>
-        <div class="arch-desc">ggwave FSK modem &mdash; 9 protocols across audible, ultrasound, and dual-tone bands. <code>48kHz</code> sample rate, AudioWorklet capture</div>
+        <div class="arch-desc"><a href="https://github.com/ggerganov/ggwave" style="color:var(--green);text-decoration:none">ggwave</a> by Georgi Gerganov &mdash; 9 FSK protocols across audible, ultrasound, and dual-tone bands. <code>48kHz</code> sample rate, AudioWorklet capture</div>
       </div>
     </div>
   </div>
@@ -1173,7 +1176,7 @@ footer .footer-links a:hover { color: var(--green); }
 <span class="keyword">await</span> sp.<span class="fn">sendText</span>(<span class="string">'hello from the other side'</span>);
 
 <span class="comment">// Send a QR code</span>
-<span class="keyword">await</span> sp.<span class="fn">sendQr</span>(<span class="string">'https://github.com/0xNtive/iot'</span>);
+<span class="keyword">await</span> sp.<span class="fn">sendQr</span>(<span class="string">'https://github.com/0xNtive/wavepx'</span>);
 
 <span class="comment">// Send a pixel image (16x16 B&W)</span>
 <span class="keyword">const</span> pixels = <span class="keyword">new</span> <span class="const">Array</span>(<span class="const">256</span>).<span class="fn">fill</span>(<span class="const">false</span>);
@@ -1592,7 +1595,7 @@ $ <span class="fn">wavepx</span>
     <div class="science-grid">
       <div class="science-card">
         <h3>FSK Modulation</h3>
-        <p>Frequency-Shift Keying maps each byte to a specific audio frequency. The receiver uses FFT (Fast Fourier Transform) to decompose the audio back into frequency components and read the data. Like a musical barcode.</p>
+        <p>Powered by <a href="https://github.com/ggerganov/ggwave" style="color:var(--green);text-decoration:none">ggwave</a>. Frequency-Shift Keying maps each byte to a specific audio frequency. The receiver uses FFT (Fast Fourier Transform) to decompose the audio back into frequency components and read the data. Like a musical barcode.</p>
         <div class="formula">byte &rarr; frequency(byte) &rarr; FFT &rarr; byte</div>
       </div>
       <div class="science-card">
@@ -1624,7 +1627,7 @@ $ <span class="fn">wavepx</span>
     <div class="section-desc">Open the app on two devices. Hit listen on one, send on the other. Watch data travel through the air.</div>
     <div class="hero-actions">
       <a href="./index.html" class="btn btn-primary">Launch App</a>
-      <a href="https://github.com/0xNtive/iot" class="btn">View Source</a>
+      <a href="https://github.com/0xNtive/wavepx" class="btn">View Source</a>
     </div>
   </div>
 </section>
@@ -1635,9 +1638,10 @@ $ <span class="fn">wavepx</span>
     <div class="inner">
       <span class="logo">WAVEPX</span>
       <ul class="footer-links">
-        <li><a href="https://github.com/0xNtive/iot">GitHub</a></li>
+        <li><a href="https://github.com/0xNtive/wavepx">GitHub</a></li>
         <li><a href="https://www.npmjs.com/package/wavepx">npm</a></li>
         <li><a href="./index.html">App</a></li>
+        <li style="color:var(--text-faint)">Built on <a href="https://github.com/ggerganov/ggwave">ggwave</a> by <a href="https://github.com/ggerganov">Georgi Gerganov</a></li>
       </ul>
     </div>
   </div>

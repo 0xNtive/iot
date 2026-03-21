@@ -295,7 +295,7 @@
       <details class="edu-blurb edu-blurb-footer">
         <summary>How ggwave encodes audio</summary>
         <div class="edu-content">
-          <p>WAVEPX uses <strong>ggwave</strong>, which encodes data as audio tones using FSK (frequency-shift keying). Each byte is mapped to a specific frequency, and the receiver uses FFT to decode it back.</p>
+          <p>WAVEPX is built on top of <strong><a href="https://github.com/ggerganov/ggwave" target="_blank" style="color:var(--accent)">ggwave</a></strong> by <a href="https://github.com/ggerganov" target="_blank" style="color:var(--accent)">Georgi Gerganov</a>, which encodes data as audio tones using FSK (frequency-shift keying). Each byte is mapped to a specific frequency, and the receiver uses FFT to decode it back.</p>
           <p><strong>Audible</strong> mode uses frequencies you can hear (~1-4 kHz) — good for demos. <strong>Ultrasound</strong> uses 15-20 kHz — nearly inaudible to most people. <strong>DT800</strong> uses dual-tone encoding for better noise resistance. Faster protocols pack more data per second but are more sensitive to noise.</p>
         </div>
       </details>

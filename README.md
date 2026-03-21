@@ -2,7 +2,7 @@
 
 Transmit files, images, and data between devices using sound.
 
-Built on [ggwave](https://github.com/ggerganov/ggwave). TypeScript library + web app. Fountain codes for reliable file transfer, deflate compression, QR codes, pixel art, grayscale/palette images, dithering, and a battleship game — all over audio.
+An application framework built on top of [ggwave](https://github.com/ggerganov/ggwave) by [Georgi Gerganov](https://github.com/ggerganov). ggwave provides the brilliant data-over-sound foundation — FSK modulation, FFT decoding, and 9 audio protocols across audible, ultrasound, and dual-tone frequency bands. wavepx adds the application layer on top: multi-frame chunking, fountain codes for reliable delivery, DEFLATE compression, palette quantization, dithering, and full protocols for file transfer, image transmission, QR codes, and games — all over audio.
 
 [Documentation & API Reference](./app/landing.html) &#8226; [npm](https://www.npmjs.com/package/wavepx)
 
@@ -196,7 +196,7 @@ Five-layer stack:
    |
  Codec           lib/bitpack.ts, lib/rle.ts, lib/fountain.ts, lib/deflate.ts, lib/palette.ts, lib/dither.ts
    |
- Transport       lib/transport.ts (ggwave FFI) + lib/audio.ts (Web Audio capture/playback)
+ Transport       lib/transport.ts (ggwave by Georgi Gerganov) + lib/audio.ts (Web Audio capture/playback)
 ```
 
 ## Project structure
@@ -235,6 +235,10 @@ npm run build:app    # build app only
 npm test             # run all tests
 npm run test:watch   # watch mode
 ```
+
+## Acknowledgments
+
+wavepx is built on top of [ggwave](https://github.com/ggerganov/ggwave) by [Georgi Gerganov](https://github.com/ggerganov). ggwave handles the core data-over-sound encoding and decoding — FSK modulation, FFT-based reception, and support for multiple audio protocols. Without ggwave, none of this would be possible.
 
 ## License
 

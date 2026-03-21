@@ -46,9 +46,9 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/0xNtive/iot.git"
+    "url": "git+https://github.com/0xNtive/wavepx.git"
   },
-  "homepage": "https://github.com/0xNtive/iot#readme",
+  "homepage": "https://github.com/0xNtive/wavepx#readme",
   "devDependencies": {
     "typescript": "^5.7.0",
     "vite": "^6.0.0",
