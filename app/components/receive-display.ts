@@ -155,10 +155,8 @@ export class ReceiveDisplay {
     palette: { r: number; g: number; b: number }[],
   ): void {
     this.renderToCanvas(ctx, width, height, (row, col) => {
-      const colorIdx = indices[row * width + col];
-      // -1 or undefined = unpainted pixel (show as dark background)
-      if (colorIdx == null || colorIdx < 0 || colorIdx >= palette.length) return null;
-      return palette[colorIdx];
+      const colorIdx = indices[row * width + col] ?? 0;
+      return palette[colorIdx] ?? { r: 0, g: 0, b: 0 };
     });
   }
 

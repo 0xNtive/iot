@@ -225,24 +225,24 @@ export class ChunkAssembler {
     this.chunks.set(chunk.index, chunk.payload);
 
     if (this.width > 0 && this.height > 0) {
-      const partialResult = this.assemblePartial(true);
+      const partial = this.assemblePartial();
       const progress = this.chunks.size / this.total;
-      this.onProgress?.(partialResult.pixels, this.width, this.height, this.bitDepth, progress, partialResult.palette);
+      this.onProgress?.(partial.pixels, this.width, this.height, this.bitDepth, progress, partial.palette);
     }
 
     if (this.chunks.size === this.total) {
-      const finalResult = this.assemblePartial(false);
+      const result = this.assemblePartial();
       return {
         width: this.width, height: this.height,
-        pixels: finalResult.pixels, bitDepth: this.bitDepth,
-        palette: finalResult.palette,
+        pixels: result.pixels, bitDepth: this.bitDepth,
+        palette: result.palette,
       };
     }
 
     return null;
   }
 
-  private assemblePartial(partial = true): { pixels: number[]; palette?: RGB[] } {
+  private assemblePartial(): { pixels: number[]; palette?: RGB[] } {
     const parts: Uint8Array[] = [];
     let totalLen = 0;
     for (let i = 0; i < this.total; i++) {
@@ -268,9 +268,7 @@ export class ChunkAssembler {
       case Compression.RLEGray:
         return { pixels: rleDecodeGray(combined, totalPixels) };
       case Compression.Palette: {
-        // Partial: fill=-1 (dark bg), completeOnly=true (whole colors appear at once)
-        // Final: fill=0 (default bg), completeOnly=false (decode everything)
-        const result = decodePaletteImage(combined, this.width, this.height, partial ? -1 : 0, partial);
+        const result = decodePaletteImage(combined, this.width, this.height);
         return { pixels: result.indices, palette: result.palette };
       }
       case Compression.Raw:
