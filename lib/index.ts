@@ -1,5 +1,6 @@
 export { SonicPixel } from './wavepx.js';
-export { waveformsToWav } from './audio.js';
+export { AudioManager, waveformsToWav } from './audio.js';
+export { GGWaveTransport } from './transport.js';
 export { encodeFrame, decodeFrame } from './protocol.js';
 export { packBits, unpackBits, packValues, unpackValues } from './bitpack.js';
 export { rleEncode, rleDecode, rleEncodeGray, rleDecodeGray, quantize, dequantize } from './rle.js';

@@ -151,7 +151,8 @@ export class ArenaPanel {
   }
 
   private render(entries: ArenaEntry[], gridSize: number): void {
-    if (entries.length === 0) {
+    const allEmpty = entries.length === 0 || entries.every(e => e.encodedBytes === 0);
+    if (allEmpty) {
       this.container.innerHTML = '<div class="arena-empty">Draw something or load an image (Image tab) to compare strategies</div>';
       return;
     }

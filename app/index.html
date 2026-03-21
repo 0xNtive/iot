@@ -4,6 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>WAVEPX</title>
+  <meta name="description" content="Transmit files, images, and data over sound. Fountain codes, DEFLATE compression, reliable transfer.">
+  <meta property="og:title" content="WAVEPX — Data Over Sound">
+  <meta property="og:description" content="Transmit files, images, and data through sound. No internet required.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%230a0a0f'/><rect x='2' y='4' width='3' height='3' fill='%2300ff88'/><rect x='6' y='2' width='3' height='5' fill='%2300ff88'/><rect x='10' y='5' width='3' height='3' fill='%2300ff88'/><rect x='4' y='9' width='3' height='4' fill='%2300ff88'/><rect x='9' y='10' width='3' height='3' fill='%2300ff88'/></svg>">
   <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
@@ -130,6 +134,7 @@
           <div class="tab-content" id="tab-text">
             <textarea id="text-input" placeholder="Type a message..." rows="5" maxlength="138"></textarea>
             <div class="byte-counter"><span id="byte-count">0</span>/138 bytes</div>
+            <div id="text-hint" class="text-hint" hidden>Over 138 bytes — use the Transfer tab for longer messages</div>
           </div>
 
           <!-- Transfer tab -->

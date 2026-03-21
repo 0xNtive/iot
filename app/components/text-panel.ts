@@ -1,11 +1,13 @@
 export class TextPanel {
   private input: HTMLTextAreaElement;
   private byteCount: HTMLSpanElement;
+  private hintEl: HTMLElement;
   private onPayloadSize: (size: number) => void;
 
   constructor(onPayloadSize: (size: number) => void) {
     this.input = document.getElementById('text-input') as HTMLTextAreaElement;
     this.byteCount = document.getElementById('byte-count') as HTMLSpanElement;
+    this.hintEl = document.getElementById('text-hint') as HTMLElement;
     this.onPayloadSize = onPayloadSize;
 
     this.input.addEventListener('input', () => this.update());
@@ -22,8 +24,10 @@ export class TextPanel {
 
     if (bytes > 138) {
       this.byteCount.style.color = '#ff0066';
+      this.hintEl.hidden = false;
     } else {
       this.byteCount.style.color = '';
+      this.hintEl.hidden = true;
     }
 
     // +2 for TXT header

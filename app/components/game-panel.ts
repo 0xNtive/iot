@@ -47,6 +47,8 @@ export class GamePanel {
   private newGameBtn: HTMLButtonElement;
   private state: GameState;
   private onSendFrame: ((frame: Uint8Array) => void) | null = null;
+  private responseTimer: ReturnType<typeof setTimeout> | null = null;
+  private lastSentFrame: Uint8Array | null = null;
   private hoverCell: { x: number; y: number } | null = null;
   private targetHoverCell: { x: number; y: number } | null = null;
   private lastShot: { x: number; y: number; grid: 'my' | 'target' } | null = null;
@@ -136,6 +138,8 @@ export class GamePanel {
       }
 
       case GameSubtype.RESULT: {
+        this.clearResponseTimer();
+        this.lastSentFrame = null;
         recordResult(this.state, msg.x, msg.y, msg.result);
         this.lastShot = { x: msg.x, y: msg.y, grid: 'target' };
 
@@ -204,8 +208,10 @@ export class GamePanel {
       x: cell.x,
       y: cell.y,
     });
+    this.lastSentFrame = frame;
     this.onSendFrame?.(frame);
     this.setStatus('Shot fired — waiting for result...', 'info');
+    this.startResponseTimer();
   }
 
   private onMyGridHover(e: MouseEvent): void {
@@ -255,6 +261,8 @@ export class GamePanel {
   }
 
   private resetGame(): void {
+    this.clearResponseTimer();
+    this.lastSentFrame = null;
     this.state = createGameState();
     this.hoverCell = null;
     this.targetHoverCell = null;
@@ -283,6 +291,24 @@ export class GamePanel {
     this.statusEl.textContent = text;
     this.statusEl.className = `game-status game-status-${type}`;
     this.updateCursors();
+  }
+
+  private startResponseTimer(): void {
+    this.clearResponseTimer();
+    this.responseTimer = setTimeout(() => {
+      if (this.lastSentFrame) {
+        this.setStatus('No response — retrying...', 'miss');
+        this.onSendFrame?.(this.lastSentFrame);
+        this.startResponseTimer();
+      }
+    }, 15000);
+  }
+
+  private clearResponseTimer(): void {
+    if (this.responseTimer) {
+      clearTimeout(this.responseTimer);
+      this.responseTimer = null;
+    }
   }
 
   private updateCursors(): void {

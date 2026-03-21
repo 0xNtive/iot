@@ -199,6 +199,13 @@ textarea:focus {
   margin-top: 6px;
 }
 
+.text-hint {
+  font-size: 10px;
+  color: var(--accent-alt);
+  margin-top: 4px;
+  text-align: right;
+}
+
 .upload-btn {
   cursor: pointer;
   color: var(--text-dim);
@@ -333,9 +340,16 @@ select:focus {
   border-color: var(--accent-dim);
 }
 
-.btn-primary:disabled {
+.btn-primary:disabled,
+.btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+.btn:disabled:hover {
+  border-color: var(--border);
+  color: var(--text);
+  box-shadow: none;
 }
 
 .btn-small {
@@ -396,30 +410,30 @@ select:focus {
   text-shadow: 0 0 4px rgba(0,0,0,0.8);
 }
 
-/* Stop/Pause buttons */
-.btn-stop {
-  border-color: var(--accent-alt) !important;
-  color: var(--accent-alt) !important;
+/* Stop/Pause buttons — higher specificity via .controls-row */
+.controls-row .btn.btn-stop {
+  border-color: var(--accent-alt);
+  color: var(--accent-alt);
 }
 
-.btn-stop:hover {
-  background: var(--accent-alt) !important;
-  color: var(--bg) !important;
+.controls-row .btn.btn-stop:hover {
+  background: var(--accent-alt);
+  color: var(--bg);
 }
 
-.btn-pause {
-  border-color: #ffaa00 !important;
-  color: #ffaa00 !important;
+.controls-row .btn.btn-pause {
+  border-color: #ffaa00;
+  color: #ffaa00;
 }
 
-.btn-pause:hover {
-  background: #ffaa00 !important;
-  color: var(--bg) !important;
-}
-
-.btn-pause.paused {
+.controls-row .btn.btn-pause:hover {
   background: #ffaa00;
-  color: var(--bg) !important;
+  color: var(--bg);
+}
+
+.controls-row .btn.btn-pause.paused {
+  background: #ffaa00;
+  color: var(--bg);
 }
 
 /* Status bar */
@@ -789,5 +803,20 @@ select:focus {
   #qr-preview {
     width: 100%;
     max-width: 320px;
+  }
+
+  .game-layout {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  #game-my-grid,
+  #game-target-grid {
+    width: min(160px, calc(100vw - 80px));
+    height: min(160px, calc(100vw - 80px));
+  }
+
+  .game-col-labels {
+    width: calc(min(160px, calc(100vw - 80px)) + 16px);
   }
 }

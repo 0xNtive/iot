@@ -96,8 +96,8 @@ export function encodeTransferFrame(msg: TransferMessage): Uint8Array {
   switch (msg.subtype) {
     case TransferSubtype.SYN: {
       const nameBytes = new TextEncoder().encode(msg.fileName);
-      const nameLen = Math.min(nameBytes.length, 124); // fit in 140 total
-      const frame = new Uint8Array(16 + nameLen);
+      const nameLen = Math.min(nameBytes.length, 122); // fit in 140 total (18 + nameLen)
+      const frame = new Uint8Array(18 + nameLen);
       frame[0] = TRANSFER_FRAME_TYPE;
       frame[1] = TransferSubtype.SYN;
       frame[2] = msg.sessionId & 0xFF;
@@ -107,14 +107,16 @@ export function encodeTransferFrame(msg: TransferMessage): Uint8Array {
       frame[6] = (msg.compressedSize >>> 8) & 0xFF;
       frame[7] = msg.compressedSize & 0xFF;
       frame[8] = msg.blockSize & 0xFF;
-      frame[9] = msg.sourceBlockCount & 0xFF;
-      frame[10] = msg.totalBlockCount & 0xFF;
-      frame[11] = (msg.crc32 >>> 24) & 0xFF;
-      frame[12] = (msg.crc32 >>> 16) & 0xFF;
-      frame[13] = (msg.crc32 >>> 8) & 0xFF;
-      frame[14] = msg.crc32 & 0xFF;
-      frame[15] = nameLen;
-      frame.set(nameBytes.subarray(0, nameLen), 16);
+      frame[9] = (msg.sourceBlockCount >>> 8) & 0xFF;
+      frame[10] = msg.sourceBlockCount & 0xFF;
+      frame[11] = (msg.totalBlockCount >>> 8) & 0xFF;
+      frame[12] = msg.totalBlockCount & 0xFF;
+      frame[13] = (msg.crc32 >>> 24) & 0xFF;
+      frame[14] = (msg.crc32 >>> 16) & 0xFF;
+      frame[15] = (msg.crc32 >>> 8) & 0xFF;
+      frame[16] = msg.crc32 & 0xFF;
+      frame[17] = nameLen;
+      frame.set(nameBytes.subarray(0, nameLen), 18);
       return frame;
     }
     case TransferSubtype.SYN_ACK: {
@@ -167,19 +169,19 @@ export function decodeTransferFrame(data: Uint8Array): TransferMessage {
   const subtype = data[1];
   switch (subtype) {
     case TransferSubtype.SYN: {
-      if (data.length < 16) throw new Error('SYN frame too short');
-      const nameLen = data[15];
-      const nameBytes = data.slice(16, 16 + nameLen);
+      if (data.length < 18) throw new Error('SYN frame too short');
+      const nameLen = data[17];
+      const nameBytes = data.slice(18, 18 + nameLen);
       return {
         subtype: TransferSubtype.SYN,
         sessionId: data[2],
         compressed: (data[3] & 0x80) !== 0,
-        originalSize: (data[4] << 8) | data[5],
-        compressedSize: (data[6] << 8) | data[7],
+        originalSize: ((data[4] << 8) | data[5]) >>> 0,
+        compressedSize: ((data[6] << 8) | data[7]) >>> 0,
         blockSize: data[8],
-        sourceBlockCount: data[9],
-        totalBlockCount: data[10],
-        crc32: ((data[11] << 24) | (data[12] << 16) | (data[13] << 8) | data[14]) >>> 0,
+        sourceBlockCount: ((data[9] << 8) | data[10]) >>> 0,
+        totalBlockCount: ((data[11] << 8) | data[12]) >>> 0,
+        crc32: ((data[13] << 24) | (data[14] << 16) | (data[15] << 8) | data[16]) >>> 0,
         fileName: new TextDecoder().decode(nameBytes),
       };
     }

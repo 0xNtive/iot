@@ -50,7 +50,8 @@ export class PixelCanvas {
     this.sourceRgba = null;
     this.rgbaData = null;
     if (this.sourceBitmap) {
-      this.sampleBitmap(this.sourceBitmap);
+      this.render(); // show empty grid immediately
+      this.sampleBitmap(this.sourceBitmap); // then resample async
     } else {
       this.render();
     }
@@ -160,11 +161,11 @@ export class PixelCanvas {
     const img = await createImageBitmap(file);
     this.sourceBitmap?.close();
     this.sourceBitmap = img;
-    this.sampleBitmap(img);
+    await this.sampleBitmap(img);
   }
 
   /** Sample an ImageBitmap to the current grid size and reprocess. */
-  private sampleBitmap(img: ImageBitmap): void {
+  private async sampleBitmap(img: ImageBitmap): Promise<void> {
     const size = this.gridSize;
     const off = new OffscreenCanvas(size, size);
     const ctx = off.getContext('2d')!;
@@ -179,6 +180,11 @@ export class PixelCanvas {
 
     const imageData = ctx.getImageData(0, 0, size, size);
     this.sourceRgba = new Uint8Array(imageData.data);
+
+    // Yield to UI before heavy dithering on large grids
+    if (size >= 128) {
+      await new Promise(r => requestAnimationFrame(r));
+    }
     this.reprocessFromSource();
   }
 

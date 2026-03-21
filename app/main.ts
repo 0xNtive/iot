@@ -137,32 +137,35 @@ function getCurrentFrames(): Uint8Array[] | null {
   }
 }
 
+function switchToTab(target: string): void {
+  activeTab = target;
+  document.querySelectorAll('.tab').forEach((t) => {
+    t.classList.toggle('active', (t as HTMLElement).dataset.tab === target);
+  });
+  document.querySelectorAll('.tab-content').forEach((c) => {
+    c.classList.toggle('active', c.id === `tab-${target}`);
+  });
+  // Disable WAV download on tabs that don't produce frames
+  const downloadBtn = document.getElementById('btn-download') as HTMLButtonElement;
+  const noDownload = target === 'transfer' || target === 'game' || target === 'arena';
+  downloadBtn.disabled = noDownload;
+  downloadBtn.title = noDownload ? 'WAV download not available for this tab' : '';
+  if (target === 'arena') {
+    const imgCanvas = imagePanel.getPixelCanvas();
+    const hasImageContent = imgCanvas.getRawLuma() !== null || imgCanvas.getRgbaData() !== null;
+    if (hasImageContent) {
+      arenaPanel.update(imgCanvas, imgCanvas.getDitherAlgorithm());
+    } else {
+      arenaPanel.update(pixelCanvas);
+    }
+  }
+  updateChunkInfo();
+}
+
 function initTabs(): void {
-  const tabs = document.querySelectorAll('.tab');
-  const contents = document.querySelectorAll('.tab-content');
-
-  tabs.forEach((tab) => {
+  document.querySelectorAll('.tab').forEach((tab) => {
     tab.addEventListener('click', () => {
-      const target = (tab as HTMLElement).dataset.tab!;
-      activeTab = target;
-
-      tabs.forEach((t) => t.classList.remove('active'));
-      tab.classList.add('active');
-
-      contents.forEach((c) => c.classList.remove('active'));
-      document.getElementById(`tab-${target}`)!.classList.add('active');
-
-      if (target === 'arena') {
-        // Use image panel's canvas if it has content, else draw canvas
-        const imgCanvas = imagePanel.getPixelCanvas();
-        const hasImageContent = imgCanvas.getRawLuma() !== null || imgCanvas.getRgbaData() !== null;
-        if (hasImageContent) {
-          arenaPanel.update(imgCanvas, imgCanvas.getDitherAlgorithm());
-        } else {
-          arenaPanel.update(pixelCanvas);
-        }
-      }
-      updateChunkInfo();
+      switchToTab((tab as HTMLElement).dataset.tab!);
     });
   });
 }
@@ -249,9 +252,11 @@ async function initSonic(): Promise<void> {
       receiveDisplay.showProgress(pixels, width, height, bitDepth, progress, palette);
     },
     onGameMessage: (msg) => {
+      if (activeTab !== 'game') switchToTab('game');
       gamePanel.handleMessage(msg);
     },
     onTransferMessage: (msg) => {
+      if (activeTab !== 'transfer') switchToTab('transfer');
       transferPanel.handleTransferMessage(msg);
     },
     protocol: SonicProtocol.AudibleFast,
@@ -369,4 +374,9 @@ async function handleDownload(): Promise<void> {
 document.addEventListener('DOMContentLoaded', () => {
   initTabs();
   initComponents();
+
+  // Auto-start listening (mic permission will be requested)
+  toggleListening().catch(() => {
+    // Permission denied or error — user can click Listen manually
+  });
 });

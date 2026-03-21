@@ -312,6 +312,7 @@ export class SonicPixel {
         if (msg.subtype === 0x04 /* DONE */ && session.onDone(msg as any)) {
           // Early done
         }
+        onTransfer?.(msg); // chain to original handler
       };
       this.config.onTransferMessage = synAckHandler;
 
@@ -380,6 +381,7 @@ export class SonicPixel {
         if (msg.subtype === 0x04 /* DONE */ && session.onDone(msg as any)) {
           doneReceived = true;
         }
+        onTransfer?.(msg); // chain to original handler
       };
       this.config.onTransferMessage = doneHandler;
 

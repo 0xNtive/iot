@@ -146,10 +146,15 @@ export function receiveSetup(state: GameState, opponentHash: number): void {
 
 /** After both hashes are known, decide who goes first. */
 function decideTurnOrder(state: GameState): void {
-  if (state.myHash <= state.opponentHash) {
+  if (state.myHash < state.opponentHash) {
     state.phase = 'my-turn';
-  } else {
+  } else if (state.myHash > state.opponentHash) {
     state.phase = 'their-turn';
+  } else {
+    // Hash collision tiebreaker: XOR with ship count parity
+    // Both sides compute the same result deterministically
+    const tiebreak = (state.myHash ^ 0xA5A5A5A5) >>> 0;
+    state.phase = (tiebreak % 2 === 0) ? 'my-turn' : 'their-turn';
   }
 }
 
