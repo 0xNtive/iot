@@ -61,7 +61,7 @@ export class AudioManager {
   /** Get current frequency spectrum data (0-255 per bin, 128 bins). */
   getFrequencyData(): Uint8Array | null {
     if (!this.analyser || !this.frequencyData) return null;
-    this.analyser.getByteFrequencyData(this.frequencyData);
+    this.analyser.getByteFrequencyData(this.frequencyData as Uint8Array<ArrayBuffer>);
     return this.frequencyData;
   }
 

@@ -21,7 +21,7 @@
   ],
   "scripts": {
     "dev": "vite --config vite.config.app.ts",
-    "build:lib": "vite build --config vite.config.lib.ts && tsc --emitDeclarationOnly --outDir dist/lib",
+    "build:lib": "vite build --config vite.config.lib.ts && tsc -p tsconfig.lib.json",
     "build:app": "vite build --config vite.config.app.ts",
     "build": "npm run build:lib && npm run build:app",
     "prepublishOnly": "npm run build",

@@ -4,6 +4,8 @@ Transmit files, images, and data between devices using sound.
 
 Built on [ggwave](https://github.com/ggerganov/ggwave). TypeScript library + web app. Fountain codes for reliable file transfer, deflate compression, QR codes, pixel art, grayscale/palette images, dithering, and a battleship game — all over audio.
 
+[Documentation & API Reference](./app/landing.html) &#8226; [npm](https://www.npmjs.com/package/wavepx)
+
 ## Quick start
 
 ```bash
@@ -100,8 +102,8 @@ Indexed-color image with a palette of up to 16 RGB colors.
 
 ```typescript
 import { quantizeColors } from 'wavepx';
-const { indices, palette } = quantizeColors(rgbaPixels, 16);
-await sonic.sendPaletteImage({ width: 32, height: 32, indices, palette });
+const { indices, palette } = quantizeColors(rgbaPixels, width, height, 16);
+await sonic.sendPaletteImage({ width, height, indices, palette });
 ```
 
 ### sendFileTransfer
@@ -201,9 +203,9 @@ Five-layer stack:
 
 ```
 lib/           wavepx library (ES module, published to npm)
-app/           Web app (Vite SPA)
+app/           Web app (Vite SPA) + documentation landing page
 bin/           CLI entry point
-test/          Unit tests (vitest)
+test/          Unit tests (vitest, 342 tests across 23 files)
 ```
 
 ## Development
@@ -215,6 +217,23 @@ npm test             # run tests (vitest)
 npm run build        # build lib + app
 npm run build:lib    # build library only
 npm run build:app    # build app only
+```
+
+## Testing
+
+342 tests across 23 test files covering all modules:
+
+- **Codec layer** — bitpack, RLE (1-bit and grayscale), quantization, dithering, palette encoding
+- **Protocol layer** — frame encode/decode for all 6 frame types, chunk assembly, game and transfer protocols
+- **Erasure coding** — fountain code encoding, decoding, packet loss recovery, out-of-order delivery
+- **Transfer sessions** — full sender/receiver lifecycle, CRC verification, error handling
+- **Game logic** — ship placement, combat, victory detection, hash-based turn order
+- **Integration** — cross-module roundtrips, stress tests, compression strategy selection
+- **Deflate** — compression/decompression roundtrips
+
+```bash
+npm test             # run all tests
+npm run test:watch   # watch mode
 ```
 
 ## License
