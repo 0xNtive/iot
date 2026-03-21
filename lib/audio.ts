@@ -24,6 +24,8 @@ export class AudioManager {
   private useWorklet = false;
   private onAudioData: ((samples: Float32Array) => void) | null = null;
   private onAudioLevel: ((level: number) => void) | null = null;
+  private sampleBuffer: Float32Array | null = null;
+  private sampleOffset = 0;
 
   async init(): Promise<void> {
     this.audioCtx = new AudioContext({ sampleRate: SAMPLE_RATE });
@@ -67,9 +69,29 @@ export class AudioManager {
     this.sourceNode = this.audioCtx.createMediaStreamSource(this.stream);
 
     if (this.useWorklet) {
+      // AudioWorklet sends 128-sample render quanta — buffer to BUFFER_SIZE
+      // for ggwave compatibility (needs larger FFT windows)
+      this.sampleBuffer = new Float32Array(BUFFER_SIZE);
+      this.sampleOffset = 0;
+
       const worklet = new AudioWorkletNode(this.audioCtx, 'wavepx-capture');
       worklet.port.onmessage = (e: MessageEvent) => {
-        this.handleSamples(e.data as Float32Array);
+        const chunk = e.data as Float32Array;
+        if (!this.sampleBuffer) return;
+
+        let chunkOffset = 0;
+        while (chunkOffset < chunk.length) {
+          const space = BUFFER_SIZE - this.sampleOffset;
+          const toCopy = Math.min(space, chunk.length - chunkOffset);
+          this.sampleBuffer.set(chunk.subarray(chunkOffset, chunkOffset + toCopy), this.sampleOffset);
+          this.sampleOffset += toCopy;
+          chunkOffset += toCopy;
+
+          if (this.sampleOffset >= BUFFER_SIZE) {
+            this.handleSamples(new Float32Array(this.sampleBuffer));
+            this.sampleOffset = 0;
+          }
+        }
       };
       this.sourceNode.connect(worklet);
       worklet.connect(this.audioCtx.destination);
@@ -104,6 +126,8 @@ export class AudioManager {
     }
     this.onAudioData = null;
     this.onAudioLevel = null;
+    this.sampleBuffer = null;
+    this.sampleOffset = 0;
   }
 
   /**
