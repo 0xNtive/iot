@@ -4,13 +4,12 @@ Transmit files, images, and data between devices using sound.
 
 An application framework built on top of [ggwave](https://github.com/ggerganov/ggwave) by [Georgi Gerganov](https://github.com/ggerganov). ggwave provides the brilliant data-over-sound foundation — FSK modulation, FFT decoding, and 9 audio protocols across audible, ultrasound, and dual-tone frequency bands. wavepx adds the application layer on top: multi-frame chunking, fountain codes for reliable delivery, DEFLATE compression, palette quantization, dithering, and full protocols for file transfer, image transmission, QR codes, and games — all over audio.
 
-[Documentation & API Reference](./app/index.html) &#8226; [npm](https://www.npmjs.com/package/wavepx)
+[Web App](https://wavepx.vercel.app) &#8226; [npm](https://www.npmjs.com/package/wavepx)
 
 ## Quick start
 
 ```bash
-npx wavepx              # serve the app on localhost:3000
-npx wavepx -p 8080      # custom port
+npx wavepx              # open the web app
 ```
 
 ```bash
@@ -19,13 +18,12 @@ npm install wavepx       # add as a dependency
 
 ## Features
 
-- **Draw** — 1-bit pixel art editor (up to 32x32 in a single frame, larger via chunked multi-frame)
 - **Image** — grayscale (2-bit, 4-bit) and palette (up to 16 colors) image transmission with RLE compression and dithering
 - **QR** — encode/decode QR codes (versions 1-4, EC levels L/M/Q/H) and transmit the module grid
 - **Text** — send UTF-8 text messages (up to 138 bytes per frame)
 - **Transfer** — reliable file transfer (up to 64KB) using fountain codes with deflate compression, CRC-32 verification, and a SYN/SYN_ACK/DATA/DONE handshake
-- **Arena** — compression arena for comparing dithering algorithms and bit-depth encodings side by side
 - **Game** — two-player battleship over audio with ship placement, shots, results, and win detection
+- **Draw** — 1-bit pixel art editor (up to 32x32 in a single frame, larger via chunked multi-frame)
 
 ## Library API
 
@@ -172,24 +170,18 @@ All frames are single ggwave transmissions (max 140 bytes). Byte 0 identifies th
 
 SETUP (ship placement hash), SHOT (coordinates), RESULT (hit/miss/sunk), WIN (game over).
 
-## CLI usage
+## CLI
 
 ```
-npx wavepx [options]
-
-Options:
-  -p, --port <number>   Port to serve on (default: 3000)
+npx wavepx              # opens the web app in your browser
+npx wavepx --help       # show help
 ```
-
-Serves the built web app. Open on two devices in the same room — transmit data between them using speaker/microphone.
 
 ## Architecture
 
-Five-layer stack:
+Four-layer library stack:
 
 ```
- App UI          app/components/*.ts — panels for each mode
-   |
  SonicPixel      lib/wavepx.ts — high-level API, send/receive orchestration
    |
  Protocol        lib/protocol.ts, lib/chunked.ts, lib/game-protocol.ts, lib/transfer-protocol.ts
@@ -199,11 +191,12 @@ Five-layer stack:
  Transport       lib/transport.ts (ggwave by Georgi Gerganov) + lib/audio.ts (Web Audio capture/playback)
 ```
 
+The web app lives in a [separate repository](https://github.com/0xNtive/wavepx-site).
+
 ## Project structure
 
 ```
 lib/           wavepx library (ES module, published to npm)
-app/           Web app (Vite SPA) + documentation landing page
 bin/           CLI entry point
 test/          Unit tests (vitest, 342 tests across 23 files)
 ```
@@ -212,11 +205,8 @@ test/          Unit tests (vitest, 342 tests across 23 files)
 
 ```bash
 npm install
-npm run dev          # start Vite dev server
 npm test             # run tests (vitest)
-npm run build        # build lib + app
-npm run build:lib    # build library only
-npm run build:app    # build app only
+npm run build        # build library
 ```
 
 ## Testing

@@ -1,84 +1,55 @@
 #!/usr/bin/env node
 
 /**
- * wavepx CLI — launch the wavepx app locally.
+ * wavepx CLI — open the wavepx web app.
  *
  * Usage:
- *   npx wavepx          # start on port 3000
- *   npx wavepx -p 8080  # custom port
+ *   npx wavepx          # open the web app
+ *   npx wavepx --help   # show help
  */
 
-import { createServer } from 'http';
-import { readFile } from 'fs/promises';
-import { join, extname } from 'path';
-import { fileURLToPath } from 'url';
+import { execSync } from 'child_process';
+import { platform } from 'os';
 
-const __dirname = fileURLToPath(new URL('.', import.meta.url));
-const APP_DIR = join(__dirname, '..', 'dist', 'app');
+const SITE_URL = 'https://wavepx.vercel.app';
 
-const MIME_TYPES = {
-  '.html': 'text/html',
-  '.js': 'application/javascript',
-  '.css': 'text/css',
-  '.json': 'application/json',
-  '.wasm': 'application/wasm',
-  '.png': 'image/png',
-  '.svg': 'image/svg+xml',
-  '.ico': 'image/x-icon',
-};
+const args = process.argv.slice(2);
 
-function parseArgs(args) {
-  let port = 3000;
-  for (let i = 0; i < args.length; i++) {
-    if ((args[i] === '-p' || args[i] === '--port') && args[i + 1]) {
-      port = parseInt(args[i + 1], 10) || 3000;
-    }
-  }
-  return { port };
-}
-
-const { port } = parseArgs(process.argv.slice(2));
-
-const server = createServer(async (req, res) => {
-  let filePath = req.url === '/' ? '/index.html' : req.url;
-
-  // Strip query string
-  filePath = filePath.split('?')[0];
-
-  const fullPath = join(APP_DIR, filePath);
-
-  // Prevent directory traversal
-  if (!fullPath.startsWith(APP_DIR)) {
-    res.writeHead(403);
-    res.end('Forbidden');
-    return;
-  }
-
-  try {
-    const data = await readFile(fullPath);
-    const ext = extname(fullPath);
-    const contentType = MIME_TYPES[ext] || 'application/octet-stream';
-    res.writeHead(200, { 'Content-Type': contentType });
-    res.end(data);
-  } catch {
-    // Try index.html for SPA routing
-    try {
-      const index = await readFile(join(APP_DIR, 'index.html'));
-      res.writeHead(200, { 'Content-Type': 'text/html' });
-      res.end(index);
-    } catch {
-      res.writeHead(404);
-      res.end('Not found — run "npm run build" first');
-    }
-  }
-});
-
-server.listen(port, () => {
+if (args.includes('--help') || args.includes('-h')) {
   console.log();
   console.log('  \x1b[32m\x1b[1mWAVEPX\x1b[0m  data over sound');
   console.log();
-  console.log(`  Local:   \x1b[36mhttp://localhost:${port}\x1b[0m`);
+  console.log('  Usage:');
+  console.log('    npx wavepx          Open the web app');
+  console.log('    npx wavepx --help   Show this help');
   console.log();
-  console.log('  Press Ctrl+C to stop');
+  console.log(`  Web app:  \x1b[36m${SITE_URL}\x1b[0m`);
+  console.log('  GitHub:   \x1b[36mhttps://github.com/0xNtive/wavepx\x1b[0m');
+  console.log('  npm:      \x1b[36mhttps://www.npmjs.com/package/wavepx\x1b[0m');
   console.log();
-});
+  console.log('  Built on ggwave by Georgi Gerganov');
+  console.log('  \x1b[36mhttps://github.com/ggerganov/ggwave\x1b[0m');
+  console.log();
+  process.exit(0);
+}
+
+console.log();
+console.log('  \x1b[32m\x1b[1mWAVEPX\x1b[0m  data over sound');
+console.log();
+console.log(`  Opening:  \x1b[36m${SITE_URL}\x1b[0m`);
+console.log();
+
+// Open the URL in the default browser
+const p = platform();
+try {
+  if (p === 'darwin') {
+    execSync(`open "${SITE_URL}"`);
+  } else if (p === 'win32') {
+    execSync(`start "" "${SITE_URL}"`);
+  } else {
+    execSync(`xdg-open "${SITE_URL}"`);
+  }
+} catch {
+  console.log(`  Could not open browser. Visit the URL above manually.`);
+  console.log();
+}
