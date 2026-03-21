@@ -19,6 +19,7 @@ import { quantizeColors, encodePaletteImage } from '../../lib/palette.js';
 export class ImagePanel {
   private pixelCanvas: PixelCanvas;
   private colorMode: 'bw' | 'gray4' | 'gray16' | 'color16' = 'bw';
+  private encoding: 'linear' | 'palette' = 'linear';
   private chunkInfoEl: HTMLElement;
   private onUpdatePayload: ((size: number) => void) | null = null;
 
@@ -62,6 +63,12 @@ export class ImagePanel {
       this.updateChunkInfo();
     });
 
+    const encodingSelect = document.getElementById('image-encoding') as HTMLSelectElement;
+    encodingSelect.addEventListener('change', () => {
+      this.encoding = encodingSelect.value as 'linear' | 'palette';
+      this.updateChunkInfo();
+    });
+
     const imageUpload = document.getElementById('image-upload') as HTMLInputElement;
     imageUpload.addEventListener('change', async () => {
       const file = imageUpload.files?.[0];
@@ -85,14 +92,19 @@ export class ImagePanel {
     return this.colorMode;
   }
 
+  getEncoding(): 'linear' | 'palette' {
+    return this.encoding;
+  }
+
   /** Update chunk info display. Returns chunk count for status bar. */
   updateChunkInfo(): number {
     const size = this.pixelCanvas.getGridSize();
 
-    if (this.colorMode === 'color16') {
-      const rgba = this.pixelCanvas.getRgbaData();
+    // Palette encoding: use source RGBA regardless of display mode
+    if (this.encoding === 'palette' || this.colorMode === 'color16') {
+      const rgba = this.pixelCanvas.getSourceRgba() ?? this.pixelCanvas.getRgbaData();
       if (!rgba) {
-        this.chunkInfoEl.textContent = 'Load an image to use color mode';
+        this.chunkInfoEl.textContent = 'Load an image to use palette encoding';
         this.onUpdatePayload?.(0);
         return 0;
       }

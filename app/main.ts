@@ -95,11 +95,12 @@ function updateChunkInfo(): void {
 }
 
 /** Get the active pixel canvas (draw or image tab). */
-function getActivePixelCanvas(): { canvas: PixelCanvas; mode: 'bw' | 'gray4' | 'gray16' | 'color16' } {
+function getActivePixelCanvas(): { canvas: PixelCanvas; mode: 'bw' | 'gray4' | 'gray16' | 'color16'; usePalette: boolean } {
   if (activeTab === 'image') {
-    return { canvas: imagePanel.getPixelCanvas(), mode: imagePanel.getColorMode() };
+    const usePalette = imagePanel.getEncoding() === 'palette' || imagePanel.getColorMode() === 'color16';
+    return { canvas: imagePanel.getPixelCanvas(), mode: imagePanel.getColorMode(), usePalette };
   }
-  return { canvas: pixelCanvas, mode: colorMode };
+  return { canvas: pixelCanvas, mode: colorMode, usePalette: false };
 }
 
 /** Get the current frames to send (for download or send). */
@@ -107,10 +108,10 @@ function getCurrentFrames(): Uint8Array[] | null {
   switch (activeTab) {
     case 'draw':
     case 'image': {
-      const { canvas, mode } = getActivePixelCanvas();
+      const { canvas, usePalette } = getActivePixelCanvas();
       const size = canvas.getGridSize();
-      if (mode === 'color16') {
-        const rgba = canvas.getRgbaData();
+      if (usePalette) {
+        const rgba = canvas.getSourceRgba() ?? canvas.getRgbaData();
         if (!rgba) return null;
         const palImg = quantizeColors(rgba, size, size, 16);
         return encodeChunkedPaletteImage(palImg);
@@ -293,16 +294,16 @@ async function handleSend(): Promise<void> {
   if (!sonic) await initSonic();
 
   try {
-    const { canvas, mode } = getActivePixelCanvas();
+    const { canvas, usePalette } = getActivePixelCanvas();
     const size = canvas.getGridSize();
     const progress = (sent: number, total: number) => statusBar.setSendProgress(sent, total);
 
     switch (activeTab) {
       case 'draw':
       case 'image': {
-        if (mode === 'color16') {
-          const rgba = canvas.getRgbaData();
-          if (!rgba) { alert('Load an image first for color mode'); return; }
+        if (usePalette) {
+          const rgba = canvas.getSourceRgba() ?? canvas.getRgbaData();
+          if (!rgba) { alert('Load an image first'); return; }
           const palImg = quantizeColors(rgba, size, size, 16);
           await sonic!.sendPaletteImage(palImg, progress);
         } else {

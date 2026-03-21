@@ -157,6 +157,11 @@ export class PixelCanvas {
     return this.sourceBitmap !== null;
   }
 
+  /** Get source RGBA data (available after loadImage, regardless of current mode). */
+  getSourceRgba(): Uint8Array | null {
+    return this.sourceRgba;
+  }
+
   async loadImage(file: File): Promise<void> {
     const img = await createImageBitmap(file);
     this.sourceBitmap?.close();
