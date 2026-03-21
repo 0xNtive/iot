@@ -75,40 +75,43 @@ export class SonicPixel {
         if (!this.listening) return;
         try {
           const payload = this.transport.decode(samples);
-          if (!payload) return;
-
-          if (payload[0] === CHUNK_TYPE) {
-            const chunk = decodeChunkFrame(payload);
-            const result = this.assembler.addChunk(chunk);
-            if (result) {
-              const bd = result.bitDepth === BitDepth.Gray4 ? 2 : result.bitDepth === BitDepth.Gray16 ? 4 : 1;
-              this.config.onReceive?.({
-                type: FrameType.CHUNK,
-                width: result.width,
-                height: result.height,
-                bitDepth: bd,
-                pixels: result.pixels,
-                palette: result.palette,
-              });
-            }
-          } else if (payload[0] === GAME_FRAME_TYPE) {
-            const gameMsg = decodeGameFrame(payload);
-            this.config.onGameMessage?.(gameMsg);
-          } else if (payload[0] === TRANSFER_FRAME_TYPE) {
-            const transferMsg = decodeTransferFrame(payload);
-            this.config.onTransferMessage?.(transferMsg);
-          } else {
-            const msg = decodeFrame(payload);
-            if (msg !== 'chunk' && msg !== 'game' && msg !== 'transfer') {
-              this.config.onReceive?.(msg);
-            }
-          }
+          if (payload) this.dispatchFrame(payload);
         } catch (err) {
           this.config.onError?.(err instanceof Error ? err : new Error(String(err)));
         }
       },
       this.config.onAudioLevel,
     );
+  }
+
+  /** Dispatch a decoded frame to the appropriate handler. Used by both listener and loopback. */
+  private dispatchFrame(payload: Uint8Array): void {
+    if (payload[0] === CHUNK_TYPE) {
+      const chunk = decodeChunkFrame(payload);
+      const result = this.assembler.addChunk(chunk);
+      if (result) {
+        const bd = result.bitDepth === BitDepth.Gray4 ? 2 : result.bitDepth === BitDepth.Gray16 ? 4 : 1;
+        this.config.onReceive?.({
+          type: FrameType.CHUNK,
+          width: result.width,
+          height: result.height,
+          bitDepth: bd,
+          pixels: result.pixels,
+          palette: result.palette,
+        });
+      }
+    } else if (payload[0] === GAME_FRAME_TYPE) {
+      const gameMsg = decodeGameFrame(payload);
+      this.config.onGameMessage?.(gameMsg);
+    } else if (payload[0] === TRANSFER_FRAME_TYPE) {
+      const transferMsg = decodeTransferFrame(payload);
+      this.config.onTransferMessage?.(transferMsg);
+    } else {
+      const msg = decodeFrame(payload);
+      if (msg !== 'chunk' && msg !== 'game' && msg !== 'transfer') {
+        this.config.onReceive?.(msg);
+      }
+    }
   }
 
   stopListening(): void {
@@ -125,6 +128,7 @@ export class SonicPixel {
     this.sendAborted = false;
     try {
       const frame = encodeFrame(msg);
+      this.dispatchFrame(frame); // loopback: sender sees own content
       const samples = this.transport.encode(frame, this.protocol, this.volume);
       try {
         await this.audio.play(samples);
@@ -196,6 +200,7 @@ export class SonicPixel {
         }
         if (this.sendAborted) break;
 
+        this.dispatchFrame(chunks[i]); // loopback: progressive rendering
         const samples = this.transport.encode(chunks[i], turboProto, this.volume);
         try {
           await this.audio.play(samples);
@@ -262,6 +267,7 @@ export class SonicPixel {
 
     this.setState(SonicState.Sending);
     try {
+      this.dispatchFrame(frame); // loopback
       const samples = this.transport.encode(frame, this.protocol, this.volume);
       try {
         await this.audio.play(samples);
